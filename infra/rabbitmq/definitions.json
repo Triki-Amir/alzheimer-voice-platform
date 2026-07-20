@@ -1,0 +1,35 @@
+{
+  "rabbit_version": "3.13.0",
+  "users": [
+    { "name": "voiceapp", "password_hash": "", "tags": "administrator" }
+  ],
+  "vhosts": [{ "name": "/" }],
+  "permissions": [
+    { "user": "voiceapp", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*" }
+  ],
+  "queues": [
+    { "name": "quality_check", "vhost": "/", "durable": true },
+    { "name": "audio_cleaning", "vhost": "/", "durable": true },
+    { "name": "diarization", "vhost": "/", "durable": true },
+    { "name": "voice_extraction", "vhost": "/", "durable": true },
+    { "name": "vad_segmentation", "vhost": "/", "durable": true },
+    { "name": "stt_transcription", "vhost": "/", "durable": true },
+    { "name": "acoustic_features", "vhost": "/", "durable": true },
+    { "name": "linguistic_features", "vhost": "/", "durable": true },
+    { "name": "feature_engineering", "vhost": "/", "durable": true },
+    { "name": "fusion_classification", "vhost": "/", "durable": true },
+    { "name": "report_generation", "vhost": "/", "durable": true },
+    { "name": "quality_check.dlq", "vhost": "/", "durable": true },
+    { "name": "audio_cleaning.dlq", "vhost": "/", "durable": true },
+    { "name": "diarization.dlq", "vhost": "/", "durable": true },
+    { "name": "voice_extraction.dlq", "vhost": "/", "durable": true },
+    { "name": "vad_segmentation.dlq", "vhost": "/", "durable": true },
+    { "name": "stt_transcription.dlq", "vhost": "/", "durable": true },
+    { "name": "acoustic_features.dlq", "vhost": "/", "durable": true },
+    { "name": "linguistic_features.dlq", "vhost": "/", "durable": true },
+    { "name": "feature_engineering.dlq", "vhost": "/", "durable": true },
+    { "name": "fusion_classification.dlq", "vhost": "/", "durable": true },
+    { "name": "report_generation.dlq", "vhost": "/", "durable": true }
+  ],
+  "bindings": []
+}

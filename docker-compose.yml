@@ -1,0 +1,197 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file: .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    build: ./infra/rabbitmq
+    env_file: .env
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    env_file: .env
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: ["/bin/sh", "/scripts/init-buckets.sh"]
+    volumes:
+      - ./infra/minio/init-buckets.sh:/scripts/init-buckets.sh
+
+  nginx:
+    build: ./infra/nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - ingestion-service
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: services/ingestion-service/Dockerfile
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8002:8000"
+
+  quality-check-service:
+    build:
+      context: .
+      dockerfile: services/quality-check-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  audio-cleaning-service:
+    build:
+      context: .
+      dockerfile: services/audio-cleaning-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  diarization-service:
+    build:
+      context: .
+      dockerfile: services/diarization-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  voice-extraction-service:
+    build:
+      context: .
+      dockerfile: services/voice-extraction-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  vad-segmentation-service:
+    build:
+      context: .
+      dockerfile: services/vad-segmentation-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  stt-service:
+    build:
+      context: .
+      dockerfile: services/stt-service/Dockerfile
+    env_file: .env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  acoustic-feature-service:
+    build:
+      context: .
+      dockerfile: services/acoustic-feature-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  linguistic-feature-service:
+    build:
+      context: .
+      dockerfile: services/linguistic-feature-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  feature-engineering-service:
+    build:
+      context: .
+      dockerfile: services/feature-engineering-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  fusion-classification-service:
+    build:
+      context: .
+      dockerfile: services/fusion-classification-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  report-service:
+    build:
+      context: .
+      dockerfile: services/report-service/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  minio_data:
