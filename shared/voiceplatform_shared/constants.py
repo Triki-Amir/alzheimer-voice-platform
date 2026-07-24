@@ -1,0 +1,12 @@
+class Queues:
+    QUALITY_CHECK = "quality_check"
+    AUDIO_CLEANING = "audio_cleaning"
+    DIARIZATION = "diarization"
+    VOICE_EXTRACTION = "voice_extraction"
+    VAD_SEGMENTATION = "vad_segmentation"
+    STT_TRANSCRIPTION = "stt_transcription"
+    ACOUSTIC_FEATURES = "acoustic_features"
+    LINGUISTIC_FEATURES = "linguistic_features"
+    FEATURE_ENGINEERING = "feature_engineering"
+    FUSION_CLASSIFICATION = "fusion_classification"
+    REPORT_GENERATION = "report_generation"

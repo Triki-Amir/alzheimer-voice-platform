@@ -38,3 +38,8 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT DEFAULT 'clinician',
     created_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS doctor_voice_profiles (
+    doctor_id UUID PRIMARY KEY REFERENCES users(id),
+    embedding FLOAT8[] NOT NULL,        -- vecteur d'embedding (ex: 192 dims ECAPA-TDNN)
+    created_at TIMESTAMPTZ DEFAULT now()
+);
