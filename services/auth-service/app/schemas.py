@@ -49,13 +49,15 @@ class TwoFactorConfirmResponse(Token):
 class DoctorRegister(BaseModel):
     email: EmailStr
     password: str
-    full_name: Optional[str] = None
+    name:str
+    family_name:str
 
 
 class DoctorOut(BaseModel):
     id: UUID
     email: EmailStr
-    full_name: Optional[str] = None
+    name: str
+    family_name: str
     role: str
     totp_enabled: bool
 

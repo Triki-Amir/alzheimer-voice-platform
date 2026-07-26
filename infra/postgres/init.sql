@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     external_ref TEXT,
-    first_name TEXT,
-    last_name TEXT,
+    first_name TEXT not null,
+    last_name TEXT not null,
     date_of_birth DATE,
     doctor_id UUID,  -- FK vers users(id) ajoutée plus bas (ordre de création des tables)
     created_at TIMESTAMPTZ DEFAULT now()
@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     status TEXT NOT NULL DEFAULT 'created',
     raw_audio_path TEXT,
     patient_audio_path TEXT,
+    wrapped_data_key TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -40,7 +41,8 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     hashed_password TEXT NOT NULL,
     role TEXT DEFAULT 'clinician',
-    full_name TEXT,
+    name TEXT not null,
+    family_name TEXT not null,
     created_at TIMESTAMPTZ DEFAULT now(),
     -- Authentification à deux facteurs (TOTP)
     totp_secret TEXT,

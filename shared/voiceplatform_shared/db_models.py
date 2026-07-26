@@ -42,8 +42,8 @@ class Doctor(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     hashed_password = Column(Text, nullable=False)
     role = Column(String, default="clinician", nullable=False)
-    name = Column(String, nullable=True)
-    family_name = Column(String, nullable=True)
+    name = Column(String)
+    family_name = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # --- Authentification à deux facteurs (TOTP) ---
@@ -76,3 +76,15 @@ class Patient(Base):
 
     def __repr__(self) -> str:
         return f"<Patient {self.first_name} {self.last_name}>"
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("patients.id"), nullable=True)
+    status = Column(String, default="created",nullable=False)
+    raw_audio_path = Column(String, nullable=True)
+    patient_audio_path = Column(String, nullable=True)
+    wrapped_data_key = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
