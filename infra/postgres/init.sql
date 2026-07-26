@@ -1,6 +1,10 @@
 CREATE TABLE IF NOT EXISTS patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     external_ref TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    date_of_birth DATE,
+    doctor_id UUID,  -- FK vers users(id) ajoutée plus bas (ordre de création des tables)
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -36,10 +40,20 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     hashed_password TEXT NOT NULL,
     role TEXT DEFAULT 'clinician',
-    created_at TIMESTAMPTZ DEFAULT now()
+    full_name TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    -- Authentification à deux facteurs (TOTP)
+    totp_secret TEXT,
+    totp_enabled BOOLEAN NOT NULL DEFAULT false,
+    backup_codes TEXT
 );
 CREATE TABLE IF NOT EXISTS doctor_voice_profiles (
     doctor_id UUID PRIMARY KEY REFERENCES users(id),
     embedding FLOAT8[] NOT NULL,        -- vecteur d'embedding (ex: 192 dims ECAPA-TDNN)
     created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- patients.doctor_id référence users(id) : ajoutée ici car `users` est créée après `patients`
+ALTER TABLE patients
+    ADD CONSTRAINT fk_patients_doctor
+    FOREIGN KEY (doctor_id) REFERENCES users(id);

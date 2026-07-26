@@ -1,0 +1,78 @@
+"""
+Modèles SQLAlchemy (ORM) partagés entre les services.
+
+Contrairement à `models.py` (schémas Pydantic pour les messages RabbitMQ),
+ce module définit les classes mappées aux tables Postgres existantes :
+
+- Doctor  -> table `users`    (seuls les médecins/cliniciens ont un compte)
+- Patient -> table `patients` (fiche patient, pas de compte / pas de login)
+
+Les tables sont créées par `infra/postgres/init.sql`. Ce module ne fait que
+mapper dessus (pas de `Base.metadata.create_all` en prod - la source de
+vérité du schéma reste le SQL).
+"""
+import uuid
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import declarative_base, relationship
+
+Base = declarative_base()
+
+
+class Doctor(Base):
+    """Un médecin/clinicien = la seule entité qui se connecte à l'application.
+
+    Mappée sur la table `users` déjà présente dans init.sql (role
+    par défaut 'clinician'). On y ajoute les champs nécessaires à la 2FA.
+    """
+
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(Text, nullable=False)
+    role = Column(String, default="clinician", nullable=False)
+    name = Column(String, nullable=True)
+    family_name = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # --- Authentification à deux facteurs (TOTP) ---
+    totp_secret = Column(String, nullable=True)          # secret base32 (pyotp)
+    totp_enabled = Column(Boolean, default=False, nullable=False)
+    backup_codes = Column(Text, nullable=True)            # JSON: liste de hashs bcrypt
+
+    patients = relationship("Patient", back_populates="doctor")
+
+    def __repr__(self) -> str:
+        return f"<Doctor {self.email} (2FA={'on' if self.totp_enabled else 'off'})>"
+
+
+class Patient(Base):
+    """Fiche patient. Pas de mot de passe : le patient ne se connecte jamais,
+    seul le médecin référent (doctor_id) accède à son dossier.
+    """
+
+    __tablename__ = "patients"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    external_ref = Column(String, nullable=True)
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    date_of_birth = Column(Date, nullable=True)
+    doctor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    doctor = relationship("Doctor", back_populates="patients")
+
+    def __repr__(self) -> str:
+        return f"<Patient {self.first_name} {self.last_name}>"
