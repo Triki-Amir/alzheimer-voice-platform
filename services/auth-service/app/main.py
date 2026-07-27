@@ -66,7 +66,8 @@ def register_doctor(payload: schemas.DoctorRegister, db: Session = Depends(get_d
     doctor = models.Doctor(
         email=payload.email,
         hashed_password=auth.hash_password(payload.password),
-        full_name=payload.full_name,
+        name=payload.name,
+        family_name=payload.family_name,
         role="clinician",
     )
     db.add(doctor)
