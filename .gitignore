@@ -1,5 +1,6 @@
 # Environment variables
 pyannote-env/
 .env
+.env.exemple
 
 
