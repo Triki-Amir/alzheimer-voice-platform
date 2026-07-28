@@ -54,9 +54,13 @@ services:
     build: ./infra/nginx
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       - auth-service
       - ingestion-service
+    volumes:
+      - ./infra/nginx/certs/server.crt:/etc/nginx/certs/server.crt:ro
+      - ./infra/nginx/certs/server.key:/etc/nginx/certs/server.key:ro
 
   auth-service:
     build:
