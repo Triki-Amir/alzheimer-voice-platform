@@ -183,7 +183,7 @@ Crée cette arborescence avec :
 ```bash
 mkdir -p alzheimer-voice-platform/{infra/{nginx,rabbitmq,postgres,minio},services,shared/voiceplatform_shared,frontend,ml-training/notebooks,scripts}
 cd alzheimer-voice-platform
-for svc in auth-service ingestion-service quality-check-service audio-cleaning-service diarization-service voice-extraction-service vad-segmentation-service stt-service acoustic-feature-service linguistic-feature-service feature-engineering-service fusion-classification-service report-service; do
+for svc in auth-service ingestion-service quality-check-service preprocessing-service stt-service acoustic-feature-service linguistic-feature-service feature-engineering-service fusion-classification-service report-service; do
   mkdir -p services/$svc/app services/$svc/tests
 done
 ```
@@ -199,7 +199,7 @@ Ne pars pas dans tous les sens. Implémente et teste **dans cet ordre**, chaque 
 3. Auth Service (JWT) — testable seul via curl
 4. Ingestion Service — reçoit l'audio, écrit MinIO/Postgres, publie sur RabbitMQ
 5. Quality Check Service — premier consumer RabbitMQ, valide la chaîne bout en bout
-6. Prétraitement (Cleaning → Diarization → Extraction → VAD) — 4 services séquentiels
+6. Prétraitement (Cleaning → Diarization → Extraction → VAD) — 1 service Celery orchestrateur
 7. STT Service
 8. Feature extraction (Acoustic + Linguistic, en parallèle)
 9. Feature Engineering (le "join" des deux)
@@ -336,30 +336,11 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  audio-cleaning-service:
-    build: ./services/audio-cleaning-service
+  preprocessing-service:
+    build: ./services/preprocessing-service
     env_file: .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
-  diarization-service:
-    build: ./services/diarization-service
-    env_file: .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
-  voice-extraction-service:
-    build: ./services/voice-extraction-service
-    env_file: .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
-  vad-segmentation-service:
-    build: ./services/vad-segmentation-service
-    env_file: .env
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -446,10 +427,7 @@ C'est ici que tu définis **une queue par étape du pipeline** (ce qui remplace 
   ],
   "queues": [
     { "name": "quality_check", "vhost": "/", "durable": true },
-    { "name": "audio_cleaning", "vhost": "/", "durable": true },
-    { "name": "diarization", "vhost": "/", "durable": true },
-    { "name": "voice_extraction", "vhost": "/", "durable": true },
-    { "name": "vad_segmentation", "vhost": "/", "durable": true },
+    { "name": "preprocessing", "vhost": "/", "durable": true },
     { "name": "stt_transcription", "vhost": "/", "durable": true },
     { "name": "acoustic_features", "vhost": "/", "durable": true },
     { "name": "linguistic_features", "vhost": "/", "durable": true },
@@ -457,10 +435,7 @@ C'est ici que tu définis **une queue par étape du pipeline** (ce qui remplace 
     { "name": "fusion_classification", "vhost": "/", "durable": true },
     { "name": "report_generation", "vhost": "/", "durable": true },
     { "name": "quality_check.dlq", "vhost": "/", "durable": true },
-    { "name": "audio_cleaning.dlq", "vhost": "/", "durable": true },
-    { "name": "diarization.dlq", "vhost": "/", "durable": true },
-    { "name": "voice_extraction.dlq", "vhost": "/", "durable": true },
-    { "name": "vad_segmentation.dlq", "vhost": "/", "durable": true },
+    { "name": "preprocessing.dlq", "vhost": "/", "durable": true },
     { "name": "stt_transcription.dlq", "vhost": "/", "durable": true },
     { "name": "acoustic_features.dlq", "vhost": "/", "durable": true },
     { "name": "linguistic_features.dlq", "vhost": "/", "durable": true },
@@ -875,10 +850,7 @@ CMD ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=2
 | Service | Queue consommée | Module métier | Queue publiée ensuite |
 |---|---|---|---|
 | quality-check | `quality_check` | `checks.py` (pyloudnorm, librosa SNR) | `audio_cleaning` |
-| audio-cleaning | `audio_cleaning` | `cleaning.py` (RNNoise/noisereduce) | `diarization` |
-| diarization | `diarization` | `diarize.py` (pyannote) | `voice_extraction` |
-| voice-extraction | `voice_extraction` | `extract.py` (pydub/ffmpeg) | `vad_segmentation` |
-| vad-segmentation | `vad_segmentation` | `vad.py` + `metrics.py` (Silero) | `stt_transcription` |
+| preprocessing | `preprocessing` | `cleaning.py` + `diarize.py` + `extract.py` + `vad.py` + `metrics.py` | `stt_transcription` |
 | stt | `stt_transcription` | `transcribe.py` (farukSTT) | **deux** queues : `acoustic_features` ET `linguistic_features` |
 | acoustic-feature | `acoustic_features` | `features.py` (openSMILE, Parselmouth, wav2vec2) | `feature_engineering` |
 | linguistic-feature | `linguistic_features` | `features.py` (AraBERT, XLM-R) | `feature_engineering` |
@@ -929,10 +901,7 @@ jobs:
           - auth-service
           - ingestion-service
           - quality-check-service
-          - audio-cleaning-service
-          - diarization-service
-          - voice-extraction-service
-          - vad-segmentation-service
+          - preprocessing-service
           - stt-service
           - acoustic-feature-service
           - linguistic-feature-service

@@ -1,22 +1,21 @@
+#diarize.py
 import os
 from pyannote.audio import Pipeline
 
 _pipeline = None
+
 
 def get_diarization_pipeline():
     global _pipeline
     if _pipeline is None:
         _pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=os.environ["HF_TOKEN"],  # token HuggingFace nécessaire
+            use_auth_token=os.environ["HF_TOKEN"],
         )
     return _pipeline
 
 
 def run_diarization(audio_path: str):
-    """
-    Retourne une liste de segments : [{"start": float, "end": float, "speaker": "SPEAKER_00"}, ...]
-    """
     pipeline = get_diarization_pipeline()
     diarization = pipeline(audio_path)
 

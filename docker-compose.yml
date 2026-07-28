@@ -93,19 +93,10 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  audio-cleaning-service:
+  preprocessing-service:
     build:
       context: .
-      dockerfile: services/audio-cleaning-service/Dockerfile
-    env_file: .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
-  diarization-service:
-    build:
-      context: .
-      dockerfile: services/diarization-service/Dockerfile
+      dockerfile: services/preprocessing-service/Dockerfile
     env_file: .env
     environment:
       - HF_TOKEN=${HF_TOKEN}
@@ -116,24 +107,6 @@ services:
         condition: service_healthy
     volumes:
       - diarization_models:/root/.cache/huggingface
-
-  voice-extraction-service:
-    build:
-      context: .
-      dockerfile: services/voice-extraction-service/Dockerfile
-    env_file: .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
-  vad-segmentation-service:
-    build:
-      context: .
-      dockerfile: services/vad-segmentation-service/Dockerfile
-    env_file: .env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
 
   stt-service:
     build:

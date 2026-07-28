@@ -15,12 +15,15 @@ broker_url = (
 app = Celery("test_publisher", broker=broker_url)
 
 result = app.send_task(
-    "audio_cleaning_service.process",
+    "preprocessing_service.process",
     args=[{
         "session_id": "test-session-1",
-        "raw_audio_path": "test1.WAV"
+        "raw_audio_path": "test1.WAV",
+        "metadata": {
+            "doctor_id": "11111111-1111-1111-1111-111111111111",
+        },
     }],
-    queue="audio_cleaning",
+    queue="preprocessing",
 )
 
 print("Tâche envoyée, id:", result.id)

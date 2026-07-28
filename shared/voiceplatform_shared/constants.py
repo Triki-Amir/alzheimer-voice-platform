@@ -1,4 +1,5 @@
 class Queues:
+    PREPROCESSING = "preprocessing"
     QUALITY_CHECK = "quality_check"
     AUDIO_CLEANING = "audio_cleaning"
     DIARIZATION = "diarization"

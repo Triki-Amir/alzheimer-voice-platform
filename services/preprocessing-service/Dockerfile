@@ -3,7 +3,7 @@ RUN apt-get update && apt-get install -y ffmpeg libsndfile1 git && rm -rf /var/l
 WORKDIR /app
 COPY shared/ /shared/
 RUN pip install /shared
-COPY services/diarization-service/requirements.txt .
+COPY services/preprocessing-service/requirements.txt .
 RUN pip install -r requirements.txt
-COPY services/diarization-service/app ./app
+COPY services/preprocessing-service/app ./app
 CMD ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=1"]
