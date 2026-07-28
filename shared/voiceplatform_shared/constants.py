@@ -11,3 +11,4 @@ class Queues:
     FEATURE_ENGINEERING = "feature_engineering"
     FUSION_CLASSIFICATION = "fusion_classification"
     REPORT_GENERATION = "report_generation"
+    VOICE_ENROLLMENT = "voice_enrollment"

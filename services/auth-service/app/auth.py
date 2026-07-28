@@ -15,7 +15,7 @@ from . import models
 # ---------------------------------------------------------------------------
 JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
-JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "60"))
+JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "120"))
 PRE_AUTH_EXPIRE_MINUTES = int(os.environ.get("PRE_AUTH_EXPIRE_MINUTES", "5"))
 TOTP_ISSUER = os.environ.get("TOTP_ISSUER", "Alzheimer Voice Platform")
 

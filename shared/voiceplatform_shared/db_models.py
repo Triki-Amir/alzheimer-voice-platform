@@ -12,6 +12,8 @@ mapper dessus (pas de `Base.metadata.create_all` en prod - la source de
 vérité du schéma reste le SQL).
 """
 import uuid
+from sqlalchemy import Float
+from sqlalchemy.dialects.postgresql import ARRAY
 
 from sqlalchemy import (
     Boolean,
@@ -88,3 +90,22 @@ class Session(Base):
     patient_audio_path = Column(String, nullable=True)
     wrapped_data_key = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class DoctorVoiceProfile(Base):
+    """Empreinte vocale du médecin (embedding, pas l'audio brut).
+
+    Écrite par voice-extraction-service après traitement de l'échantillon
+    d'enrôlement. Lue par voice-extraction-service / diarization-service
+    pour identifier les segments du médecin lors d'une vraie session.
+    """
+
+    __tablename__ = "doctor_voice_profiles"
+
+    doctor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    embedding = Column(ARRAY(Float), nullable=False)  # ex: vecteur 192-d (ECAPA-TDNN)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    doctor = relationship("Doctor")
+
+    def __repr__(self) -> str:
+        return f"<DoctorVoiceProfile doctor_id={self.doctor_id}>"

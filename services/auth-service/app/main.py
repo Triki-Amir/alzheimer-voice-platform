@@ -11,6 +11,13 @@ from sqlalchemy.orm import Session
 from . import auth, models, schemas
 from .database import get_db
 
+
+from fastapi import File, UploadFile
+from voiceplatform_shared.crypto import generate_data_key, wrap_key, encrypt_bytes
+from voiceplatform_shared.minio_client import get_minio_client
+from voiceplatform_shared.publisher import publish_session_message
+from voiceplatform_shared.constants import Queues
+
 app = FastAPI(title="Auth Service")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -66,7 +73,8 @@ def register_doctor(payload: schemas.DoctorRegister, db: Session = Depends(get_d
     doctor = models.Doctor(
         email=payload.email,
         hashed_password=auth.hash_password(payload.password),
-        full_name=payload.full_name,
+        name=payload.name,
+        family_name=payload.family_name,
         role="clinician",
     )
     db.add(doctor)
@@ -196,3 +204,37 @@ def list_my_patients(
     db: Session = Depends(get_db),
 ):
     return db.query(models.Patient).filter(models.Patient.doctor_id == doctor.id).all()
+
+# =============================================================================
+# Enrôlement vocal du médecin (échantillon de référence pour l'extraction)
+# =============================================================================
+@app.post("/doctors/voice-enroll", status_code=202)
+async def enroll_doctor_voice(
+    audio: UploadFile = File(...),
+    doctor: models.Doctor = Depends(get_current_doctor),  # exige 2FA complète
+):
+    raw_audio = await audio.read()
+
+    data_key = generate_data_key()
+    wrapped_key = wrap_key(data_key)
+    encrypted_audio = encrypt_bytes(data_key, raw_audio)
+
+    object_name = f"{doctor.id}/enrollment.enc"
+    minio = get_minio_client()
+    minio.put_object(
+        "doctor-voice-enrollment",
+        object_name,
+        io.BytesIO(encrypted_audio),
+        length=len(encrypted_audio),
+    )
+
+    publish_session_message(
+        Queues.VOICE_ENROLLMENT,
+        {
+            "doctor_id": str(doctor.id),
+            "audio_path": object_name,
+            "wrapped_data_key": wrapped_key,
+        },
+    )
+
+    return {"status": "enrollment_queued"}
