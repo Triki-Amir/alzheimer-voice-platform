@@ -10,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from . import auth, models, schemas
 from .database import get_db
-
-
+from voiceplatform_shared.audit import log_action
 from fastapi import File, UploadFile
 from voiceplatform_shared.crypto import generate_data_key, wrap_key, encrypt_bytes
 from voiceplatform_shared.minio_client import get_minio_client
@@ -41,7 +40,16 @@ def get_current_doctor(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur introuvable")
     return doctor
 
-
+def get_current_superadmin(
+    doctor: models.Doctor = Depends(get_current_doctor),
+) -> models.Doctor:
+    """Comme get_current_doctor, mais exige en plus le role superadmin."""
+    if doctor.role != models.DoctorRole.SUPERADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acces reserve au superadmin",
+        )
+    return doctor
 def get_pre_auth_doctor(token: str, db: Session) -> models.Doctor:
     payload = auth.decode_pre_auth_token(token)
     if not payload:
@@ -238,3 +246,40 @@ async def enroll_doctor_voice(
     )
 
     return {"status": "enrollment_queued"}
+
+
+@app.delete("/admin/doctors/{doctor_id}")
+def delete_doctor(doctor_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
+    doctor = db.query(models.Doctor).filter(models.Doctor.id == doctor_id).first()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Medecin introuvable")
+
+    log_action(db, actor_id=admin.id, action="delete_doctor", target_type="doctor", target_id=doctor.id, details={"email": doctor.email})
+    db.delete(doctor)
+    db.commit()   # <- log ET suppression valides ensemble, ou aucun des deux
+    return {"message": "Medecin supprime"}
+
+@app.delete("/admin/patients/{patient_id}")
+def delete_patient(patient_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
+    """Supprime un compte patient (superadmin uniquement)."""
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient introuvable")
+    
+    log_action(db, actor_id=admin.id, action="delete_patient", target_type="patient", target_id=patient.id, details={"email": patient.email})
+    db.delete(patient)
+    db.commit()
+    return {"message": "Patient deleted"}
+
+@app.get("/admin/doctors", response_model=list[schemas.DoctorOut])
+def list_doctors(admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
+    """Liste tous les médecins (superadmin uniquement)."""
+    log_action(db, actor_id=admin.id, action="list_doctors")
+    return db.query(models.Doctor).all()
+
+@app.get("/admin/patients", response_model=list[schemas.PatientOut])
+def list_patients(admin: models.Doctor = Depends(get_current_superadmin),db: Session = Depends(get_db)):
+    """Liste tous les patients (superadmin uniquement)."""
+    log_action(db, actor_id=admin.id, action="list_patients")
+    return db.query(models.Patient).all()
+
