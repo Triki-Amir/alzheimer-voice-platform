@@ -1,5 +1,6 @@
 # Environment variables
 pyannote-env/
+
 .env
 __pycache__/
 
