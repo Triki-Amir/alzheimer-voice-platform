@@ -3,6 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
+from voiceplatform_shared.db_models import DoctorRole
 
 
 # ---------- Auth / login (2 etapes) ----------
@@ -50,7 +51,7 @@ class DoctorRegister(BaseModel):
     email: EmailStr
     password: str
     name:str
-    family_name:str
+    family_name :str
 
 
 class DoctorOut(BaseModel):
@@ -58,7 +59,7 @@ class DoctorOut(BaseModel):
     email: EmailStr
     name: str
     family_name: str
-    role: str
+    role: DoctorRole
     totp_enabled: bool
 
     class Config:

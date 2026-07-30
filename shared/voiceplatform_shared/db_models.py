@@ -11,10 +11,11 @@ Les tables sont créées par `infra/postgres/init.sql`. Ce module ne fait que
 mapper dessus (pas de `Base.metadata.create_all` en prod - la source de
 vérité du schéma reste le SQL).
 """
+from sqlalchemy.dialects.postgresql import JSON
 import uuid
 from sqlalchemy import Float
 from sqlalchemy.dialects.postgresql import ARRAY
-
+from enum import Enum
 from sqlalchemy import (
     Boolean,
     Column,
@@ -30,6 +31,12 @@ from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
+class DoctorRole(str, Enum):
+    CLINICIAN = "clinician"
+    SUPERADMIN = "superadmin"
+    # add new ranks here later — one line, no migration
+    # SENIOR_CLINICIAN = "senior_clinician"
+    # DEPARTMENT_HEAD = "department_head"
 
 class Doctor(Base):
     """Un médecin/clinicien = la seule entité qui se connecte à l'application.
@@ -57,7 +64,6 @@ class Doctor(Base):
 
     def __repr__(self) -> str:
         return f"<Doctor {self.email} (2FA={'on' if self.totp_enabled else 'off'})>"
-
 
 class Patient(Base):
     """Fiche patient. Pas de mot de passe : le patient ne se connecte jamais,
@@ -109,3 +115,14 @@ class DoctorVoiceProfile(Base):
 
     def __repr__(self) -> str:
         return f"<DoctorVoiceProfile doctor_id={self.doctor_id}>"
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    action = Column(String, nullable=False)
+    target_type = Column(String, nullable=True)
+    target_id = Column(UUID(as_uuid=True), nullable=True)
+    details = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

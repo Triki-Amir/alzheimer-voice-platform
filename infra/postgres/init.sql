@@ -59,3 +59,13 @@ CREATE TABLE IF NOT EXISTS doctor_voice_profiles (
 ALTER TABLE patients
     ADD CONSTRAINT fk_patients_doctor
     FOREIGN KEY (doctor_id) REFERENCES users(id);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    actor_id UUID NOT NULL REFERENCES users(id),
+    action VARCHAR NOT NULL,        -- ex: "delete_doctor", "view_audio"
+    target_type VARCHAR,            -- ex: "doctor", "patient", "session"
+    target_id UUID,
+    details JSONB,                  -- contexte libre (ex: email supprime)
+    created_at TIMESTAMPTZ DEFAULT now()
+);
