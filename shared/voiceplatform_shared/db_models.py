@@ -11,6 +11,8 @@ Les tables sont créées par `infra/postgres/init.sql`. Ce module ne fait que
 mapper dessus (pas de `Base.metadata.create_all` en prod - la source de
 vérité du schéma reste le SQL).
 """
+from traitlets import Integer
+from sqlalchemy import Column, Integer, DateTime
 from sqlalchemy.dialects.postgresql import JSON
 import uuid
 from sqlalchemy import Float
@@ -59,7 +61,8 @@ class Doctor(Base):
     totp_secret = Column(String, nullable=True)          # secret base32 (pyotp)
     totp_enabled = Column(Boolean, default=False, nullable=False)
     backup_codes = Column(Text, nullable=True)            # JSON: liste de hashs bcrypt
-
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
     patients = relationship("Patient", back_populates="doctor")
 
     def __repr__(self) -> str:

@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timedelta, timezone
 from . import auth, models, schemas
 from .database import get_db
 from voiceplatform_shared.audit import log_action
@@ -96,9 +97,41 @@ def register_doctor(payload: schemas.DoctorRegister, db: Session = Depends(get_d
 # =============================================================================
 @app.post("/token", response_model=schemas.LoginStepOneResponse)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = auth.authenticate_user(db, form.username, form.password)
+    # Recherche de l'utilisateur
+    user = (
+        db.query(models.Doctor)
+        .filter(models.Doctor.email == form.username)
+        .first()
+    )
+
+    # Ne pas révéler si l'utilisateur existe
     if not user:
         raise HTTPException(status_code=401, detail="Identifiants invalides")
+
+    # Vérifier si le compte est temporairement verrouillé
+    if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=423,
+            detail="Compte temporairement verrouillé. Réessayez plus tard."
+        )
+
+    # Vérification du mot de passe
+    if not auth.verify_password(form.password, user.hashed_password):
+        user.failed_login_attempts += 1
+
+        # Verrouillage après 5 échecs
+        if user.failed_login_attempts >= 5:
+            user.failed_login_attempts = 0
+            user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+        db.commit()
+
+        raise HTTPException(status_code=401, detail="Identifiants invalides")
+
+    # Connexion réussie : réinitialiser les compteurs
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    db.commit()
 
     pre_auth_token = auth.create_pre_auth_token(user)
 
@@ -108,13 +141,13 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
             pre_auth_token=pre_auth_token,
             message="Mot de passe correct. Appelez /login/verify-2fa avec votre code TOTP.",
         )
+
     return schemas.LoginStepOneResponse(
         requires_2fa_setup=True,
         pre_auth_token=pre_auth_token,
-        message="Mot de passe correct. La 2FA n'est pas encore configuree : "
-        "appelez /2fa/setup puis /2fa/confirm avec ce pre_auth_token.",
+        message="Mot de passe correct. La 2FA n'est pas encore configurée : "
+                "appelez /2fa/setup puis /2fa/confirm avec ce pre_auth_token.",
     )
-
 
 # =============================================================================
 # Etape 2a : premiere configuration de la 2FA (obligatoire, une seule fois)

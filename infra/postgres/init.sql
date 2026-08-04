@@ -47,7 +47,11 @@ CREATE TABLE IF NOT EXISTS users (
     -- Authentification à deux facteurs (TOTP)
     totp_secret TEXT,
     totp_enabled BOOLEAN NOT NULL DEFAULT false,
-    backup_codes TEXT
+    backup_codes TEXT,
+
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+
+    locked_until TIMESTAMPTZ
 );
 CREATE TABLE IF NOT EXISTS doctor_voice_profiles (
     doctor_id UUID PRIMARY KEY REFERENCES users(id),
