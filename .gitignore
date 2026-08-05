@@ -4,6 +4,7 @@ pyannote-env/
 
 .env
 __pycache__/
+.venv
 
 .next/
 node_modules/

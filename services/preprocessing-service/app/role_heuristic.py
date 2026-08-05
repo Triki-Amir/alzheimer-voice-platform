@@ -7,6 +7,8 @@ from sqlalchemy import text
 from voiceplatform_shared.db_session import SessionLocal
 
 from .embeddings import cosine_similarity, extract_embedding
+import torchaudio
+from pyannote.core import Segment
 
 logger = logging.getLogger(__name__)
 SIMILARITY_THRESHOLD = 0.65
@@ -35,6 +37,8 @@ def assign_roles(audio_path: str, segments: list, doctor_id: str) -> tuple[list,
     Lève ValueError si l'assignation n'est pas exploitable (pas de profil,
     pas d'embeddings, un seul locuteur détecté).
     """
+    info = torchaudio.info(audio_path)
+    file_duration = info.num_frames / info.sample_rate
     doctor_embedding = get_doctor_embedding(doctor_id)
     if doctor_embedding is None:
         raise ValueError(f"Aucun profil vocal trouvé pour le médecin {doctor_id}")
@@ -75,6 +79,14 @@ def assign_roles(audio_path: str, segments: list, doctor_id: str) -> tuple[list,
         )
 
     for seg in segments:
+        # Clamp timestamps within valid range [0, file_duration]
+        start_time = max(0.0, float(seg["start"]))
+        end_time = min(file_duration, float(seg["end"]))
+
+        # Skip invalid or 0-length segments after clamping
+        if start_time >= end_time:
+            continue
+
         seg["role"] = "doctor" if seg["speaker"] == doctor_speaker_label else "patient"
 
     return segments, confidence_info

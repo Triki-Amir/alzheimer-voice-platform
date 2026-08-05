@@ -1,0 +1,9 @@
+celery==5.3.6
+opensmile>=2.5.0
+pandas>=2.2.0
+numpy>=1.26.4
+minio==7.2.4
+psycopg2-binary==2.9.9
+pydantic==2.6.1
+pydantic-settings==2.1.0
+soundfile==0.12.1

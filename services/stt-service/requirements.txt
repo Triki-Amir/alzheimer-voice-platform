@@ -1,0 +1,7 @@
+torch
+transformers>=4.36.0
+accelerate
+optimum
+soundfile
+celery
+minio

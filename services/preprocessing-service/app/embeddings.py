@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import torchaudio
 from pyannote.audio import Inference, Model
 from pyannote.core import Segment
 
@@ -16,11 +17,22 @@ def get_embedding_inference():
 
 
 def extract_embedding(audio_path: str, start: float, end: float) -> np.ndarray | None:
-    if end - start < MIN_SEGMENT_DURATION:
+    # Get exact audio file duration in seconds
+    info = torchaudio.info(audio_path)
+    file_duration = info.num_frames / info.sample_rate
+
+    # Clamp bounds within valid audio limits [0.0, file_duration]
+    safe_start = max(0.0, start)
+    safe_end = min(file_duration, end)
+
+    # Check duration against minimum threshold after clamping
+    if safe_end - safe_start < MIN_SEGMENT_DURATION:
         return None
+
     inference = get_embedding_inference()
-    segment = Segment(start, end)
+    segment = Segment(safe_start, safe_end)
     embedding = inference.crop(audio_path, segment)
+    
     return np.asarray(embedding).flatten()
 
 

@@ -104,7 +104,7 @@ Tu dois voir `postgres`, `rabbitmq`, et `minio` avec le statut `healthy`, et `mi
 | Service | URL | Identifiants |
 |---|---|---|
 | RabbitMQ Management | http://localhost:15672 | valeurs de `.env` |
-| MinIO Console | http://localhost:9001 | valeurs de `.env` |
+| MinIO Console | http://localhost:9001 | valeurs de `.env` |192.168.114.196
 | PostgreSQL | `localhost:5432` | valeurs de `.env` |
 
 ### Vérifier le schéma PostgreSQL
