@@ -1,7 +1,10 @@
+<<<<<<< HEAD
 # Environment variables
 pyannote-env/
 
 .env
 __pycache__/
 
-
+.next/
+node_modules/
+venv_script/

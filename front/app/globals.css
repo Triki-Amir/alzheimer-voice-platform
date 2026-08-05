@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+/* ===================== BASES ===================== */
+:root {
+    --primary: #2563EB;
+    --primary-dark: #1E40AF;
+    --secondary: #10B981;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #F8FAFC;
+    color: #1E293B;
+}
+
+/* ===================== COMPOSANTS PERSONNALISÉS ===================== */
+@layer components {
+    .btn-primary {
+        width: 100%;
+        height: 48px;
+        background-color: #2563EB;
+        color: #FFFFFF;
+        font-weight: 600;
+        border-radius: 12px;
+        transition: background-color 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-primary:hover {
+        background-color: #1E40AF;
+    }
+
+    .btn-secondary {
+        padding: 8px 16px;
+        background-color: #F3F4F6;
+        color: #374151;
+        border-radius: 8px;
+        transition: background-color 0.2s;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+        background-color: #E5E7EB;
+    }
+
+    .card {
+        background-color: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        transition: box-shadow 0.2s;
+    }
+
+    .card:hover {
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+    }
+
+    .input-primary {
+        width: 100%;
+        height: 48px;
+        padding: 0 16px;
+        border: 2px solid #E5E7EB;
+        border-radius: 12px;
+        background-color: #F9FAFB;
+        transition: border-color 0.2s;
+        outline: none;
+    }
+
+    .input-primary:focus {
+        border-color: #2563EB;
+        background-color: #FFFFFF;
+    }
+
+    .badge-success {
+        background-color: #22C55E;
+        color: #FFFFFF;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .badge-warning {
+        background-color: #F59E0B;
+        color: #FFFFFF;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .badge-danger {
+        background-color: #EF4444;
+        color: #FFFFFF;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+}
