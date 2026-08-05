@@ -1,0 +1,2 @@
+[console_scripts]
+audi = audiolab.cli:main
