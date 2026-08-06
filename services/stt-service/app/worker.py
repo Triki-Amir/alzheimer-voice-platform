@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stt_worker")
 
 STT_QUEUE = getattr(Queues, "STT_TRANSCRIPTION", "stt_transcription")
+LINGUISTIC_QUEUE = getattr(Queues, "LINGUISTIC_EXTRACTION", "linguistic_extraction")
 app = make_celery_app("stt_service", STT_QUEUE)
 
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
@@ -75,6 +76,23 @@ def process(self, message: dict):
             t_sub = time.perf_counter()
             update_patient_transcription(patient_id, transcription_text)
             logger.info("  ├─ 💾 [Postgres] Saved transcription in %.2fs", time.perf_counter() - t_sub)
+
+        # 4. Trigger Downstream Linguistic Feature Extraction Task
+        if transcription_text.strip():
+            logger.info("  ├─ 🚀 [Celery] Dispatching task to linguistic_extraction queue...")
+            app.send_task(
+                "linguistic_extraction_service.process",
+                kwargs={
+                    "message": {
+                        "session_id": session_id,
+                        "patient_id": patient_id,
+                        "transcription": transcription_text
+                    }
+                },
+                queue=LINGUISTIC_QUEUE
+            )
+        else:
+            logger.warning("  ├─ ⚠️ Empty transcription text. Skipping linguistic extraction.")
 
         total_duration = time.perf_counter() - t0
         logger.info("✅ [SUCCESS] STT finished in %.2fs (GPU Core: %.2fs) | Session: %s", 

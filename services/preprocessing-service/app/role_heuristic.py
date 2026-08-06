@@ -31,12 +31,9 @@ def get_doctor_embedding(doctor_id: str) -> np.ndarray | None:
         db.close()
 
 
+MIN_EMBEDDING_DURATION_SEC = 0.5  # PyAnnote embeddings require at least ~0.5s of audio
+
 def assign_roles(audio_path: str, segments: list, doctor_id: str) -> tuple[list, dict]:
-    """
-    Retourne (segments annotés avec 'role', infos de confiance à logger).
-    Lève ValueError si l'assignation n'est pas exploitable (pas de profil,
-    pas d'embeddings, un seul locuteur détecté).
-    """
     info = torchaudio.info(audio_path)
     file_duration = info.num_frames / info.sample_rate
     doctor_embedding = get_doctor_embedding(doctor_id)
@@ -52,6 +49,15 @@ def assign_roles(audio_path: str, segments: list, doctor_id: str) -> tuple[list,
 
     speaker_scores: dict[str, list[float]] = {}
     for seg in segments:
+        duration = seg["end"] - seg["start"]
+        
+        # 🟢 FIX: Skip micro-segments to prevent PyAnnote kernel size error
+        if duration < MIN_EMBEDDING_DURATION_SEC:
+            logger.debug(
+                f"Skipping short segment ({duration:.3f}s) for speaker {seg.get('speaker')} - too short for embedding"
+            )
+            continue
+
         emb = extract_embedding(audio_path, seg["start"], seg["end"])
         if emb is None:
             continue
@@ -60,7 +66,7 @@ def assign_roles(audio_path: str, segments: list, doctor_id: str) -> tuple[list,
 
     avg_scores = {spk: float(np.mean(s)) for spk, s in speaker_scores.items() if s}
     if not avg_scores:
-        raise ValueError("Impossible d'extraire des embeddings exploitables sur cet audio")
+        raise ValueError("Impossible d'extraire des embeddings exploitables sur cet audio (tous les segments étaient trop médiocres ou trop courts)")
 
     doctor_speaker_label = max(avg_scores, key=avg_scores.get)
     best_score = avg_scores[doctor_speaker_label]
@@ -79,11 +85,9 @@ def assign_roles(audio_path: str, segments: list, doctor_id: str) -> tuple[list,
         )
 
     for seg in segments:
-        # Clamp timestamps within valid range [0, file_duration]
         start_time = max(0.0, float(seg["start"]))
         end_time = min(file_duration, float(seg["end"]))
 
-        # Skip invalid or 0-length segments after clamping
         if start_time >= end_time:
             continue
 

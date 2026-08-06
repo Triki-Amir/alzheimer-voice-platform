@@ -162,7 +162,7 @@ services:
     environment:
       - VLLM_BASE_URL=http://vllm-server:8000/v1
       - VLLM_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ
-    command: celery -A worker.app worker -l info -Q linguistic_extraction --pool=solo -E
+    command: celery -A app.worker.app worker -l info -Q linguistic_extraction --pool=solo -E
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -201,7 +201,7 @@ services:
         condition: service_healthy
 # --- LOCAL LLM INFERENCE ENGINE ---
   vllm-server:
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.6.3.post1
     container_name: voiceapp_vllm
     runtime: nvidia
     env_file: .env
@@ -210,9 +210,10 @@ services:
       - CUDA_VISIBLE_DEVICES=0
     command: >
       --model Qwen/Qwen2.5-32B-Instruct-AWQ
-      --quantization awq
-      --gpu-memory-utilization 0.55
+      --quantization awq_marlin
+      --gpu-memory-utilization 0.70
       --max-model-len 4096
+      --enforce-eager
       --port 8000
     deploy:
       resources:
@@ -225,7 +226,8 @@ services:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 30        # Total threshold = 300s (5 minutes)
+      start_period: 90s  # Gives vLLM 90s before the first health probe starts counting retries
     ports:
       - "8000:8000"
     volumes:
