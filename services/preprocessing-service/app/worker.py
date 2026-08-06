@@ -61,8 +61,18 @@ def process(self, message: dict):
             t_sub = time.perf_counter()
             segments = run_diarization(cleaned_local)
             segments, diarization_confidence = assign_roles(cleaned_local, segments, doctor_id)
-            logger.info("  ├─ 👤 [Diarization] Completed in %.2fs (Confidence: %.2f)", 
-                        time.perf_counter() - t_sub, diarization_confidence)
+            diar_time = time.perf_counter() - t_sub
+
+            confidence_score = (
+                diarization_confidence.get('similarity_score', 0.0) 
+                if isinstance(diarization_confidence, dict) 
+                else diarization_confidence
+            )
+            logger.info(
+                "  ├─ 👤 [Diarization] Completed in %.2fs (Confidence: %.2f)",
+                diar_time,
+                confidence_score
+            )
 
             # Patient Segment Extraction
             t_sub = time.perf_counter()

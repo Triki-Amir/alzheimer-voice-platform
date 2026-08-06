@@ -2,7 +2,7 @@ import logging
 from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
-MIN_SEGMENT_MS = 100  # ignore les micro-segments quasi nuls (artefacts diarization)
+MIN_SEGMENT_MS = 300  # 🟢 FIX: Raised from 100ms to ignore short noise artifacts
 
 
 def extract_patient_segments(audio_path: str, segments: list, output_path: str) -> tuple[str, list, float]:

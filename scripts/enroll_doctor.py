@@ -13,8 +13,8 @@ POSTGRES_HOST = "localhost" if os.getenv("POSTGRES_HOST") == "postgres" else os.
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "voiceapp_db")
 
-DOCTOR_ID = "33333333-2222-3333-3333-333333333333"
-AUDIO_PATH = "/home/amir/stage/alzheimer-voice-platform/sample audio/doctor3_sample.WAV"
+DOCTOR_ID = "44444444-4444-4444-4444-444444444444"  # Unique UUID for the doctor
+AUDIO_PATH = "/home/amir/stage/alzheimer-voice-platform/sample audio/doctor-test-sample.WAV"
 
 def main():
     hf_token = os.getenv("HF_TOKEN")
@@ -36,7 +36,7 @@ def main():
         conn.execute(
             text("""
                 INSERT INTO users (id, email, hashed_password, role, name, family_name, totp_enabled)
-                VALUES (:doctor_id, 'doc3@test.com', 'x', 'clinician', 'Doctor', 'Three', false)
+                VALUES (:doctor_id, 'docXX@test.com', 'xy', 'clinician', 'Doctor', 'Test', false)
                 ON CONFLICT (id) DO NOTHING;
             """),
             {"doctor_id": DOCTOR_ID}
