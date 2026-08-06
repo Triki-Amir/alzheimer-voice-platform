@@ -110,7 +110,11 @@ def verify_totp_code(secret: str, code: str) -> bool:
 # Backup codes (recuperation si le telephone est perdu)
 # ---------------------------------------------------------------------------
 def generate_backup_codes(count: int = 8) -> list[str]:
-    return [secrets.token_hex(4) for _ in range(count)]  # ex: '3f9a1c02'
+    # 8 bytes = 64 bits of entropy. The previous 4 bytes (32 bits, ~4 billion
+    # combinations) is thin for a code that bypasses 2FA entirely rather than
+    # a 30s TOTP window — bcrypt hashing and single-use consumption help, but
+    # don't substitute for adequate entropy in the code itself.
+    return [secrets.token_hex(8) for _ in range(count)]  # ex: '3f9a1c02e4b7d815'
 
 
 def hash_backup_codes(codes: list[str]) -> list[str]:

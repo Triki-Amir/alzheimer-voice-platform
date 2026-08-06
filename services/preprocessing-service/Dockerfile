@@ -1,6 +1,7 @@
 FROM python:3.11-slim
 RUN apt-get update && apt-get install -y ffmpeg libsndfile1 git && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+COPY infra/ca/ca.crt /etc/ssl/certs/voiceapp-ca.crt
 COPY shared/ /shared/
 RUN pip install /shared
 COPY services/preprocessing-service/requirements.txt .

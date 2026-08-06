@@ -11,7 +11,6 @@ Les tables sont créées par `infra/postgres/init.sql`. Ce module ne fait que
 mapper dessus (pas de `Base.metadata.create_all` en prod - la source de
 vérité du schéma reste le SQL).
 """
-from traitlets import Integer
 from sqlalchemy import Column, Integer, DateTime
 from sqlalchemy.dialects.postgresql import JSON
 import uuid

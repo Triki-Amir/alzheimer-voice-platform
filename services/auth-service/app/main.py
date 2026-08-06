@@ -1,10 +1,13 @@
 import base64
 import io
 import json
+import os
 import uuid
+from uuid import UUID
 
 import qrcode
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -13,12 +16,29 @@ from . import auth, models, schemas
 from .database import get_db
 from voiceplatform_shared.audit import log_action
 from fastapi import File, UploadFile
-from voiceplatform_shared.crypto import generate_data_key, wrap_key, encrypt_bytes
+from voiceplatform_shared.crypto import generate_data_key, wrap_key, encrypt_bytes, encrypt_secret, decrypt_secret
 from voiceplatform_shared.minio_client import get_minio_client
 from voiceplatform_shared.publisher import publish_session_message
 from voiceplatform_shared.constants import Queues
 
 app = FastAPI(title="Auth Service")
+
+# CORS: explicit allow-list only. ALLOWED_ORIGINS is a comma-separated list
+# in .env, e.g. "https://app.example.com,http://localhost:5173" for local
+# frontend dev. Never use "*" here once the frontend sends the JWT via
+# credentials/Authorization header from a browser.
+_allowed_origins = [
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -159,7 +179,11 @@ def setup_2fa(pre_auth_token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="La 2FA est deja activee, utilisez /login/verify-2fa")
 
     secret = auth.generate_totp_secret()
-    doctor.totp_secret = secret  # pas encore 'enabled' tant que /2fa/confirm n'est pas appele
+    # Stored encrypted: a plaintext TOTP seed in the DB would let anyone with
+    # read access to that table generate valid 2FA codes for any account,
+    # which defeats the point of having 2FA. AAD = doctor id, so this
+    # ciphertext can't be copy-pasted into another doctor's row.
+    doctor.totp_secret = encrypt_secret(secret, aad=str(doctor.id).encode("ascii"))  # pas encore 'enabled' tant que /2fa/confirm n'est pas appele
     db.commit()
 
     uri = auth.totp_provisioning_uri(secret, doctor.email)
@@ -175,7 +199,8 @@ def confirm_2fa(payload: schemas.TwoFactorConfirm, db: Session = Depends(get_db)
     doctor = get_pre_auth_doctor(payload.pre_auth_token, db)
     if not doctor.totp_secret:
         raise HTTPException(status_code=400, detail="Appelez d'abord /2fa/setup")
-    if not auth.verify_totp_code(doctor.totp_secret, payload.code):
+    secret = decrypt_secret(doctor.totp_secret, aad=str(doctor.id).encode("ascii"))
+    if not auth.verify_totp_code(secret, payload.code):
         raise HTTPException(status_code=400, detail="Code TOTP invalide")
 
     backup_codes = auth.generate_backup_codes()
@@ -198,7 +223,18 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
     if not doctor.totp_enabled:
         raise HTTPException(status_code=400, detail="2FA non configuree pour ce compte")
 
-    if auth.verify_totp_code(doctor.totp_secret, payload.code):
+    # Meme verrouillage que pour le mot de passe : sans ca, un attaquant qui
+    # a deja le mot de passe pourrait brute-forcer les 6 chiffres du TOTP.
+    if doctor.locked_until and doctor.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=423,
+            detail="Compte temporairement verrouille. Reessayez plus tard.",
+        )
+
+    if auth.verify_totp_code(decrypt_secret(doctor.totp_secret, aad=str(doctor.id).encode("ascii")), payload.code):
+        doctor.failed_login_attempts = 0
+        doctor.locked_until = None
+        db.commit()
         return schemas.Token(access_token=auth.create_access_token(doctor))
 
     # Code TOTP invalide : tenter un backup code (perte du telephone)
@@ -206,8 +242,16 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
     remaining = auth.verify_and_consume_backup_code(stored_codes, payload.code)
     if remaining is not None:
         doctor.backup_codes = json.dumps(remaining)
+        doctor.failed_login_attempts = 0
+        doctor.locked_until = None
         db.commit()
         return schemas.Token(access_token=auth.create_access_token(doctor))
+
+    doctor.failed_login_attempts += 1
+    if doctor.failed_login_attempts >= 5:
+        doctor.failed_login_attempts = 0
+        doctor.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+    db.commit()
 
     raise HTTPException(status_code=401, detail="Code TOTP / backup code invalide")
 
@@ -216,7 +260,10 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
 # Verification de token (utilisee par les autres services / nginx auth_request)
 # =============================================================================
 @app.get("/verify")
-def verify(token: str):
+def verify(token: str = Depends(oauth2_scheme)):
+    """Le token voyage dans l'en-tete Authorization: Bearer <token>, jamais
+    en query string (une query string finit dans les logs nginx, l'historique
+    du navigateur, etc.)."""
     payload = auth.decode_token(token)
     if not payload or not auth.is_fully_authenticated(payload):
         raise HTTPException(status_code=401, detail="Token invalide ou 2FA non verifiee")
@@ -315,4 +362,3 @@ def list_patients(admin: models.Doctor = Depends(get_current_superadmin),db: Ses
     """Liste tous les patients (superadmin uniquement)."""
     log_action(db, actor_id=admin.id, action="list_patients")
     return db.query(models.Patient).all()
-

@@ -1,8 +1,9 @@
+import re
 from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from voiceplatform_shared.db_models import DoctorRole
 
 
@@ -50,8 +51,20 @@ class TwoFactorConfirmResponse(Token):
 class DoctorRegister(BaseModel):
     email: EmailStr
     password: str
-    name:str
-    family_name :str
+    name: str
+    family_name: str
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Le mot de passe doit contenir au moins 10 caracteres")
+        if not re.search(r"[A-Z]", v) or not re.search(r"[a-z]", v) or not re.search(r"\d", v):
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une majuscule, "
+                "une minuscule et un chiffre"
+            )
+        return v
 
 
 class DoctorOut(BaseModel):
