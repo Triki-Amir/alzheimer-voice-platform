@@ -62,6 +62,52 @@ async function parseErrorDetail(response: Response): Promise<string> {
     }
 }
 
+// ===================== Inscription =====================
+export async function registerDoctor(
+    email: string,
+    password: string,
+    name: string,
+    familyName: string
+): Promise<void> {
+    let response: Response
+    try {
+        response = await fetch(`${AUTH_URL}/doctors/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, name, family_name: familyName }),
+        })
+    } catch {
+        throw new AuthError('Impossible de contacter le serveur', 0)
+    }
+
+    if (!response.ok) {
+        throw new AuthError(await parseErrorDetail(response), response.status)
+    }
+}
+
+// ===================== Enrolement vocal (post-2FA) =====================
+// Exige un access_token COMPLET (mot de passe + TOTP verifies), comme tout
+// endpoit protege par get_current_doctor cote auth-service.
+export async function enrollDoctorVoice(accessToken: string, audioBlob: Blob, filename: string): Promise<void> {
+    const formData = new FormData()
+    formData.append('audio', audioBlob, filename)
+
+    let response: Response
+    try {
+        response = await fetch(`${AUTH_URL}/doctors/voice-enroll`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: formData,
+        })
+    } catch {
+        throw new AuthError('Impossible de contacter le serveur', 0)
+    }
+
+    if (!response.ok) {
+        throw new AuthError(await parseErrorDetail(response), response.status)
+    }
+}
+
 // ===================== Etape 1 : email + mot de passe =====================
 export async function loginStep1(email: string, password: string): Promise<LoginStepOneResult> {
     const body = new URLSearchParams()
