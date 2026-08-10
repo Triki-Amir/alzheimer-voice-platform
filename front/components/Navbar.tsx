@@ -11,8 +11,7 @@ export default function Navbar({ active }: NavbarProps) {
         { href: '/dashboard', label: '🏠 Dashboard', key: 'dashboard' },
         { href: '/patients', label: '👥 Patients', key: 'patients' },
         { href: '/tests', label: '📋 Tests', key: 'tests' },
-        { href: '#', label: '📊 Rapports', key: 'reports' },
-        { href: '#', label: '⚙️ Paramètres', key: 'settings' },
+        { href: '/rapports', label: '📊 Rapports', key: 'reports' }
     ]
 
     return (

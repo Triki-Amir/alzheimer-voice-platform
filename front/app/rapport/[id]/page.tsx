@@ -1,3 +1,4 @@
+// app/rapport/[id]/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -59,10 +60,10 @@ export default function RapportPage({ params }: RapportPageProps) {
 
     const getDiagnosisLabel = (diagnosis?: string) => {
         switch (diagnosis) {
-            case 'control': return { label: '✅ Normal', color: 'text-green-600 bg-green-50', bg: 'bg-green-500' }
-            case 'mci': return { label: '⚠️ MCI (Léger)', color: 'text-amber-600 bg-amber-50', bg: 'bg-amber-500' }
-            case 'ad': return { label: '🔴 Alzheimer', color: 'text-red-600 bg-red-50', bg: 'bg-red-500' }
-            default: return { label: 'Non évalué', color: 'text-gray-500 bg-gray-50', bg: 'bg-gray-400' }
+            case 'control': return { label: 'Normal', color: 'text-green-700 bg-green-50 border-green-200', badge: '✅ Normal' }
+            case 'mci': return { label: 'Trouble Cognitif Léger (MCI)', color: 'text-amber-700 bg-amber-50 border-amber-200', badge: '⚠️ MCI' }
+            case 'ad': return { label: 'Maladie d\'Alzheimer', color: 'text-red-700 bg-red-50 border-red-200', badge: '🔴 Alzheimer' }
+            default: return { label: 'Non évalué', color: 'text-gray-500 bg-gray-50 border-gray-200', badge: '⏳ En attente' }
         }
     }
 
@@ -78,20 +79,19 @@ export default function RapportPage({ params }: RapportPageProps) {
         return `${m}:${String(s).padStart(2, '0')}`
     }
 
-    // Définition des tests pour l'affichage
     const allTests = [
         { id: 'cookie_theft', name: 'Récit d\'image (Cookie Theft)', icon: '🖼️' },
         { id: 'fluency', name: 'Fluence verbale (Animaux)', icon: '🐾' },
         { id: 'recall', name: 'Rappel d\'informations', icon: '📝' },
-        { id: 'sentence', name: 'Construction de phrases', icon: '✏️' }
+        { id: 'sentence', name: 'Construction de phrases', icon: '✏️' },
+        { id: 'naming', name: 'Nomination d\'objets', icon: '🔍' },
+        { id: 'repetition', name: 'Répétition de phrases', icon: '🔊' },
+        { id: 'comprehension', name: 'Compréhension', icon: '🧠' },
+        { id: 'spontaneous', name: 'Discours spontané', icon: '💬' }
     ]
 
-    // Mapper les résultats des tests
     const testResults = report?.tests || []
     const completedTestIds = testResults.map(t => t.testId)
-    const completedCount = completedTestIds.length
-    const totalCount = allTests.length
-    const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
 
     if (isLoading || !user || !patient) {
         return (
@@ -111,170 +111,238 @@ export default function RapportPage({ params }: RapportPageProps) {
             <Header user={user} />
             <Navbar active="reports" />
             <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                {/* Bouton retour */}
-                <Link
-                    href={`/patient/${patient.id}`}
-                    className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6 transition"
-                >
-                    ← Retour au patient
-                </Link>
-
-                {/* En-tête */}
-                <div className="mb-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">📊 Rapport de {patient.name}</h1>
-                            <p className="text-gray-500 text-sm">
-                                Dernière mise à jour: {report?.lastSession || patient.lastSession}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-gray-500">
-                                {completedCount}/{totalCount} tests complétés
-                            </span>
-                            <Link
-                                href={`/tests`}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-                                onClick={() => localStorage.setItem('selectedPatient', patient.id)}
-                            >
-                                ▶️ Commencer un test
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Score global et stats */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center p-4 bg-gray-50 rounded-xl">
-                            <div className={`text-3xl font-bold ${getScoreColor(report?.overallScore || 0)}`}>
-                                {report?.overallScore || '—'}%
-                            </div>
-                            <div className="text-sm text-gray-500">Score global</div>
-                        </div>
-                        <div className="text-center p-4 bg-gray-50 rounded-xl">
-                            <div className="text-3xl font-bold text-blue-600">
-                                {completedCount}/{totalCount}
-                            </div>
-                            <div className="text-sm text-gray-500">Tests complétés</div>
-                        </div>
-                        <div className="text-center p-4 bg-gray-50 rounded-xl">
-                            <div className={`text-3xl font-bold ${diagnosisInfo.color.split(' ')[0]}`}>
-                                {diagnosisInfo.label}
-                            </div>
-                            <div className="text-sm text-gray-500">Diagnostic</div>
-                        </div>
-                        <div className="text-center p-4 bg-gray-50 rounded-xl">
-                            <div className="text-3xl font-bold text-purple-600">
-                                {report?.confidence ? `${Math.round(report.confidence * 100)}%` : '—'}
-                            </div>
-                            <div className="text-sm text-gray-500">Confiance</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Barre de progression */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-6">
-                    <div className="flex justify-between text-sm text-gray-600 mb-2">
-                        <span>Progression des tests</span>
-                        <span>{Math.round(progress)}%</span>
-                    </div>
-                    <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                        />
-                    </div>
-                </div>
-
-                {/* Liste complète des tests avec statut */}
-                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">📋 Résultats par test</h3>
-                    
-                    {allTests.map((test) => {
-                        const result = testResults.find(t => t.testId === test.id)
-                        const isCompleted = !!result
-                        const diag = result ? getDiagnosisLabel(result.diagnosis) : getDiagnosisLabel(undefined)
-                        
-                        return (
-                            <div
-                                key={test.id}
-                                className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl gap-3 mb-3 transition ${
-                                    isCompleted 
-                                        ? 'bg-green-50 border border-green-200' 
-                                        : 'bg-gray-50 border border-gray-200'
-                                }`}
-                            >
-                                <div className="flex items-center gap-3 flex-1">
-                                    <span className="text-2xl">{test.icon}</span>
-                                    <div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="font-medium text-gray-900">{test.name}</span>
-                                            {isCompleted ? (
-                                                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                                                    ✅ Complété
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
-                                                    ⏳ En attente
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-3 text-sm text-gray-500">
-                                            {isCompleted ? (
-                                                <>
-                                                    <span>📅 {result.date}</span>
-                                                    <span>⏱️ {formatDuration(result.duration)}</span>
-                                                    <span>🎤 Qualité: {result.quality}</span>
-                                                </>
-                                            ) : (
-                                                <span>Test non encore réalisé</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                {isCompleted ? (
-                                    <div className="flex items-center gap-3 flex-wrap">
-                                        <span className={`text-lg font-bold ${getScoreColor(result.score)}`}>
-                                            {result.score}%
-                                        </span>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diag.color}`}>
-                                            {diag.label}
-                                        </span>
-                                        {result.confidence && (
-                                            <span className="text-xs text-gray-400">
-                                                🎯 {Math.round(result.confidence * 100)}%
-                                            </span>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <Link
-                                        href={`/recording?test=${test.id}&patient=${patient.id}`}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-                                    >
-                                        ▶️ Commencer
-                                    </Link>
-                                )}
-                            </div>
-                        )
-                    })}
-                </div>
-
-                {/* Boutons d'action */}
-                <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                    <button
-                        className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition"
-                        onClick={() => alert('📄 Export PDF en cours...')}
-                    >
-                        📄 Exporter en PDF
-                    </button>
-                    <button
-                        className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition"
-                        onClick={() => router.push(`/patient/${patient.id}`)}
+                
+                {/* ==================== EN-TÊTE ==================== */}
+                <div className="flex items-center justify-between mb-6">
+                    <Link
+                        href={`/patient/${patient.id}`}
+                        className="text-sm text-gray-500 hover:text-gray-700 transition"
                     >
                         ← Retour au patient
-                    </button>
+                    </Link>
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-400">
+                            Rapport du {report?.lastSession || patient.lastSession}
+                        </span>
+                        <button
+                            onClick={() => alert('📄 Export PDF en cours...')}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+                        >
+                            📄 Exporter PDF
+                        </button>
+                    </div>
+                </div>
+
+                {/* ==================== IDENTITÉ DU PATIENT ==================== */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-6">
+                    <div className="flex items-center gap-4">
+                        <div
+                            className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0"
+                            style={{ backgroundColor: patient.color }}
+                        >
+                            {patient.initials}
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900">{patient.name}</h1>
+                            <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                                <span>ID: {patient.id}</span>
+                                <span>⭐ {patient.age} ans</span>
+                                <span>📅 Né le {patient.birthDate}</span>
+                                {patient.phone && <span>📞 {patient.phone}</span>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ==================== SECTION SOAP ==================== */}
+
+                {/* S - Subjective (Ce que le patient et sa famille rapportent) */}
+                <div className="bg-white border-l-4 border-blue-500 rounded-2xl shadow-sm p-6 mb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl">💬</span>
+                        <h2 className="text-xl font-bold text-gray-900">S - Subjective</h2>
+                        <span className="text-xs text-gray-400 font-medium">Ce que rapporte le patient / la famille</span>
+                    </div>
+                    <div className="space-y-3 text-gray-700">
+                        <p className="text-sm italic bg-gray-50 p-4 rounded-xl">
+                            "Le patient rapporte des difficultés de mémoire récentes, notamment pour retenir les noms 
+                            et se souvenir d'événements récents. La famille mentionne des oublis fréquents (clés, rendez-vous) 
+                            et une tendance à répéter les mêmes questions."
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div className="bg-blue-50 p-3 rounded-lg">
+                                <span className="font-medium text-blue-700">Symptômes rapportés</span>
+                                <ul className="mt-1 text-gray-600 list-disc list-inside">
+                                    <li>Troubles de mémoire (court terme)</li>
+                                    <li>Difficultés de concentration</li>
+                                    <li>Répétition de questions</li>
+                                </ul>
+                            </div>
+                            <div className="bg-blue-50 p-3 rounded-lg">
+                                <span className="font-medium text-blue-700">Durée / Évolution</span>
+                                <p className="mt-1 text-gray-600">Installation progressive depuis 6 mois</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* O - Objective (Données cliniques et tests) */}
+                <div className="bg-white border-l-4 border-green-500 rounded-2xl shadow-sm p-6 mb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl">📊</span>
+                        <h2 className="text-xl font-bold text-gray-900">O - Objective</h2>
+                        <span className="text-xs text-gray-400 font-medium">Données cliniques et tests</span>
+                    </div>
+
+                    {/* Résumé des tests */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                        <div className="bg-gray-50 p-3 rounded-lg text-center">
+                            <p className="text-sm text-gray-500">Tests réalisés</p>
+                            <p className="text-lg font-bold text-blue-600">{testResults.length}</p>
+                        </div>
+                        
+                        <div className="bg-gray-50 p-3 rounded-lg text-center">
+                            <p className="text-sm text-gray-500">Diagnostic</p>
+                            <p className={`text-lg font-bold ${diagnosisInfo.color.split(' ')[0]}`}>
+                                {diagnosisInfo.label}
+                            </p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg text-center">
+                            <p className="text-sm text-gray-500">Dernier test</p>
+                            <p className="text-lg font-bold text-gray-700">
+                                {testResults.length > 0 ? testResults[testResults.length - 1]?.date : '—'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Détails des tests */}
+                    <div className="space-y-3">
+                        <h4 className="font-medium text-gray-700 text-sm">Résultats par test</h4>
+                        {allTests.map((test) => {
+                            const result = testResults.find(t => t.testId === test.id)
+                            const isCompleted = !!result
+                            const diag = result ? getDiagnosisLabel(result.diagnosis) : getDiagnosisLabel(undefined)
+
+                            return (
+                                <div
+                                    key={test.id}
+                                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl gap-2 ${
+                                        isCompleted ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xl">{test.icon}</span>
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-medium text-gray-900 text-sm">{test.name}</span>
+                                                {isCompleted ? (
+                                                    <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">
+                                                        ✅ Fait
+                                                    </span>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full text-xs">
+                                                        ⏳ Non fait
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {isCompleted && result && (
+                                                <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                                                    <span>📅 {result.date}</span>
+                                                    <span>⏱️ {formatDuration(result.duration)}</span>
+                                                    <span>Score: <span className={`font-medium ${getScoreColor(result.score)}`}>
+                                                        {result.score}%
+                                                    </span></span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {isCompleted && result && (
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diag.color}`}>
+                                            {diag.badge}
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                {/* A - Assessment (Analyse et diagnostic) */}
+                <div className="bg-white border-l-4 border-amber-500 rounded-2xl shadow-sm p-6 mb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl">🧠</span>
+                        <h2 className="text-xl font-bold text-gray-900">A - Assessment</h2>
+                        <span className="text-xs text-gray-400 font-medium">Analyse et diagnostic</span>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Diagnostic */}
+                        <div className="flex items-center gap-3 p-4 rounded-xl border-2 border-amber-200 bg-amber-50">
+                            <span className="text-3xl">{diagnosisInfo.badge}</span>
+                            <div>
+                                <p className="font-bold text-gray-900">{diagnosisInfo.label}</p>
+                                <p className="text-sm text-gray-600">
+                                    Le patient présente des signes évocateurs d'un trouble cognitif.
+                                    Une évaluation complète est recommandée.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Synthèse clinique */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div className="p-4 bg-gray-50 rounded-xl">
+                                <span className="font-medium text-gray-700">Points clés</span>
+                                <ul className="mt-2 text-gray-600 list-disc list-inside space-y-1">
+                                    <li>{testResults.length}/{allTests.length} tests complétés</li>
+                                    <li>Dernière évaluation: {report?.lastSession}</li>
+                                </ul>
+                            </div>
+                            <div className="p-4 bg-gray-50 rounded-xl">
+                                <span className="font-medium text-gray-700">Facteurs de risque</span>
+                                <ul className="mt-2 text-gray-600 list-disc list-inside space-y-1">
+                                    <li>Âge: {patient.age} ans</li>
+                                    <li>Antécédents familiaux?</li>
+                                    <li>Évolution progressive</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* P - Plan (Prochaines étapes) */}
+                <div className="bg-white border-l-4 border-purple-500 rounded-2xl shadow-sm p-6 mb-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <span className="text-2xl">📋</span>
+                        <h2 className="text-xl font-bold text-gray-900">P - Plan</h2>
+                        <span className="text-xs text-gray-400 font-medium">Prochaines étapes</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-purple-50 rounded-xl">
+                            <span className="font-medium text-purple-700">🔬 Examens complémentaires</span>
+                            <ul className="mt-2 text-sm text-gray-600 list-disc list-inside space-y-1">
+                                <li>Compléter les tests cognitifs restants</li>
+                                <li>IRM cérébrale à discuter</li>
+                                <li>Bilan biologique complet</li>
+                            </ul>
+                        </div>
+                        <div className="p-4 bg-purple-50 rounded-xl">
+                            <span className="font-medium text-purple-700">🗓️ Suivi</span>
+                            <ul className="mt-2 text-sm text-gray-600 list-disc list-inside space-y-1">
+                                <li>Consultation de suivi dans 3 mois</li>
+                                <li>Évaluation neuropsychologique</li>
+                                <li>Information de la famille</li>
+                            </ul>
+                        </div>
+                        <div className="p-4 bg-purple-50 rounded-xl md:col-span-2">
+                            <span className="font-medium text-purple-700">💊 Recommandations</span>
+                            <ul className="mt-2 text-sm text-gray-600 list-disc list-inside space-y-1">
+                                <li>Maintien des activités cognitives (lecture, puzzles)</li>
+                                <li>Activité physique régulière</li>
+                                <li>Suivi nutritionnel</li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="mt-8">
