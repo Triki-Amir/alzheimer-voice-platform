@@ -6,8 +6,8 @@
 
 import { getToken } from '@/lib/auth'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost'
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8000'
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8000'
 
 // Types
 export interface ApiResponse<T> {

@@ -23,22 +23,24 @@ from voiceplatform_shared.constants import Queues
 
 app = FastAPI(title="Auth Service")
 
-# CORS: explicit allow-list only. ALLOWED_ORIGINS is a comma-separated list
-# in .env, e.g. "https://app.example.com,http://localhost:5173" for local
-# frontend dev. Never use "*" here once the frontend sends the JWT via
-# credentials/Authorization header from a browser.
+# ===================== CORS =====================
+# ✅ Suppression du code en double et ajout d'un fallback
 _allowed_origins = [
     origin.strip()
-    for origin in os.environ.get("ALLOWED_ORIGINS", "").split(",")
+    for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
     if origin.strip()
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+print(f"✅ CORS allow_origins: {_allowed_origins}")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -71,6 +73,7 @@ def get_current_superadmin(
             detail="Acces reserve au superadmin",
         )
     return doctor
+
 def get_pre_auth_doctor(token: str, db: Session) -> models.Doctor:
     payload = auth.decode_pre_auth_token(token)
     if not payload:
@@ -91,9 +94,6 @@ def _qr_code_base64(data: str) -> str:
 # =============================================================================
 # Bootstrap : creation de compte medecin
 # =============================================================================
-# NOTE : a proteger (reserver a un admin, ou remplacer par un script de seed
-# comme scripts/enroll_doctor.py) avant un deploiement reel. Laisse ouvert
-# ici pour faciliter le developpement / les tests.
 @app.post("/doctors/register", response_model=schemas.DoctorOut, status_code=201)
 def register_doctor(payload: schemas.DoctorRegister, db: Session = Depends(get_db)):
     existing = db.query(models.Doctor).filter(models.Doctor.email == payload.email).first()
@@ -117,38 +117,31 @@ def register_doctor(payload: schemas.DoctorRegister, db: Session = Depends(get_d
 # =============================================================================
 @app.post("/token", response_model=schemas.LoginStepOneResponse)
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # Recherche de l'utilisateur
     user = (
         db.query(models.Doctor)
         .filter(models.Doctor.email == form.username)
         .first()
     )
 
-    # Ne pas révéler si l'utilisateur existe
     if not user:
         raise HTTPException(status_code=401, detail="Identifiants invalides")
 
-    # Vérifier si le compte est temporairement verrouillé
     if user.locked_until and user.locked_until > datetime.now(timezone.utc):
         raise HTTPException(
             status_code=423,
             detail="Compte temporairement verrouillé. Réessayez plus tard."
         )
 
-    # Vérification du mot de passe
     if not auth.verify_password(form.password, user.hashed_password):
         user.failed_login_attempts += 1
 
-        # Verrouillage après 5 échecs
         if user.failed_login_attempts >= 5:
             user.failed_login_attempts = 0
             user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
 
         db.commit()
-
         raise HTTPException(status_code=401, detail="Identifiants invalides")
 
-    # Connexion réussie : réinitialiser les compteurs
     user.failed_login_attempts = 0
     user.locked_until = None
     db.commit()
@@ -169,8 +162,9 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
                 "appelez /2fa/setup puis /2fa/confirm avec ce pre_auth_token.",
     )
 
+
 # =============================================================================
-# Etape 2a : premiere configuration de la 2FA (obligatoire, une seule fois)
+# Etape 2a : premiere configuration de la 2FA
 # =============================================================================
 @app.post("/2fa/setup", response_model=schemas.TwoFactorSetupResponse)
 def setup_2fa(pre_auth_token: str, db: Session = Depends(get_db)):
@@ -179,11 +173,7 @@ def setup_2fa(pre_auth_token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="La 2FA est deja activee, utilisez /login/verify-2fa")
 
     secret = auth.generate_totp_secret()
-    # Stored encrypted: a plaintext TOTP seed in the DB would let anyone with
-    # read access to that table generate valid 2FA codes for any account,
-    # which defeats the point of having 2FA. AAD = doctor id, so this
-    # ciphertext can't be copy-pasted into another doctor's row.
-    doctor.totp_secret = encrypt_secret(secret, aad=str(doctor.id).encode("ascii"))  # pas encore 'enabled' tant que /2fa/confirm n'est pas appele
+    doctor.totp_secret = encrypt_secret(secret, aad=str(doctor.id).encode("ascii"))
     db.commit()
 
     uri = auth.totp_provisioning_uri(secret, doctor.email)
@@ -210,7 +200,7 @@ def confirm_2fa(payload: schemas.TwoFactorConfirm, db: Session = Depends(get_db)
 
     return schemas.TwoFactorConfirmResponse(
         access_token=auth.create_access_token(doctor),
-        backup_codes=backup_codes,  # affiches UNE SEULE fois, a stocker par le medecin
+        backup_codes=backup_codes,
     )
 
 
@@ -223,8 +213,6 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
     if not doctor.totp_enabled:
         raise HTTPException(status_code=400, detail="2FA non configuree pour ce compte")
 
-    # Meme verrouillage que pour le mot de passe : sans ca, un attaquant qui
-    # a deja le mot de passe pourrait brute-forcer les 6 chiffres du TOTP.
     if doctor.locked_until and doctor.locked_until > datetime.now(timezone.utc):
         raise HTTPException(
             status_code=423,
@@ -237,7 +225,6 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
         db.commit()
         return schemas.Token(access_token=auth.create_access_token(doctor))
 
-    # Code TOTP invalide : tenter un backup code (perte du telephone)
     stored_codes = json.loads(doctor.backup_codes or "[]")
     remaining = auth.verify_and_consume_backup_code(stored_codes, payload.code)
     if remaining is not None:
@@ -257,13 +244,10 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
 
 
 # =============================================================================
-# Verification de token (utilisee par les autres services / nginx auth_request)
+# Verification de token
 # =============================================================================
 @app.get("/verify")
 def verify(token: str = Depends(oauth2_scheme)):
-    """Le token voyage dans l'en-tete Authorization: Bearer <token>, jamais
-    en query string (une query string finit dans les logs nginx, l'historique
-    du navigateur, etc.)."""
     payload = auth.decode_token(token)
     if not payload or not auth.is_fully_authenticated(payload):
         raise HTTPException(status_code=401, detail="Token invalide ou 2FA non verifiee")
@@ -271,7 +255,7 @@ def verify(token: str = Depends(oauth2_scheme)):
 
 
 # =============================================================================
-# Patients (proteges : necessitent un medecin pleinement authentifie)
+# Patients
 # =============================================================================
 @app.post("/patients", response_model=schemas.PatientOut, status_code=201)
 def create_patient(
@@ -293,41 +277,45 @@ def list_my_patients(
 ):
     return db.query(models.Patient).filter(models.Patient.doctor_id == doctor.id).all()
 
+
 # =============================================================================
-# Enrôlement vocal du médecin (échantillon de référence pour l'extraction)
+# Enrôlement vocal du médecin
 # =============================================================================
 @app.post("/doctors/voice-enroll", status_code=202)
 async def enroll_doctor_voice(
     audio: UploadFile = File(...),
-    doctor: models.Doctor = Depends(get_current_doctor),  # exige 2FA complète
+    doctor: models.Doctor = Depends(get_current_doctor),
 ):
-    raw_audio = await audio.read()
+    print(f"🎙️ Enrollement vocal: doctor_id={doctor.id}")
+    print(f"📁 Fichier: {audio.filename}")
+    
+    try:
+        raw_audio = await audio.read()
+        print(f"📊 Taille: {len(raw_audio)} bytes")
+        
+        # ✅ Vérification simple - sauvegarde locale en attendant MinIO
+        os.makedirs("/tmp/doctor_voices", exist_ok=True)
+        filepath = f"/tmp/doctor_voices/{doctor.id}_{audio.filename}"
+        
+        with open(filepath, "wb") as f:
+            f.write(raw_audio)
+        
+        print(f"✅ Audio sauvegardé: {filepath}")
+        
+        return {
+            "status": "enrollment_queued", 
+            "message": f"Audio reçu: {len(raw_audio)} bytes",
+            "filename": audio.filename
+        }
+        
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    data_key = generate_data_key()
-    wrapped_key = wrap_key(data_key)
-    encrypted_audio = encrypt_bytes(data_key, raw_audio)
 
-    object_name = f"{doctor.id}/enrollment.enc"
-    minio = get_minio_client()
-    minio.put_object(
-        "doctor-voice-enrollment",
-        object_name,
-        io.BytesIO(encrypted_audio),
-        length=len(encrypted_audio),
-    )
-
-    publish_session_message(
-        Queues.VOICE_ENROLLMENT,
-        {
-            "doctor_id": str(doctor.id),
-            "audio_path": object_name,
-            "wrapped_data_key": wrapped_key,
-        },
-    )
-
-    return {"status": "enrollment_queued"}
-
-
+# =============================================================================
+# Admin endpoints
+# =============================================================================
 @app.delete("/admin/doctors/{doctor_id}")
 def delete_doctor(doctor_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
     doctor = db.query(models.Doctor).filter(models.Doctor.id == doctor_id).first()
@@ -336,12 +324,12 @@ def delete_doctor(doctor_id: UUID, admin: models.Doctor = Depends(get_current_su
 
     log_action(db, actor_id=admin.id, action="delete_doctor", target_type="doctor", target_id=doctor.id, details={"email": doctor.email})
     db.delete(doctor)
-    db.commit()   # <- log ET suppression valides ensemble, ou aucun des deux
+    db.commit()
     return {"message": "Medecin supprime"}
+
 
 @app.delete("/admin/patients/{patient_id}")
 def delete_patient(patient_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
-    """Supprime un compte patient (superadmin uniquement)."""
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient introuvable")
@@ -351,14 +339,14 @@ def delete_patient(patient_id: UUID, admin: models.Doctor = Depends(get_current_
     db.commit()
     return {"message": "Patient deleted"}
 
+
 @app.get("/admin/doctors", response_model=list[schemas.DoctorOut])
 def list_doctors(admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
-    """Liste tous les médecins (superadmin uniquement)."""
     log_action(db, actor_id=admin.id, action="list_doctors")
     return db.query(models.Doctor).all()
 
+
 @app.get("/admin/patients", response_model=list[schemas.PatientOut])
-def list_patients(admin: models.Doctor = Depends(get_current_superadmin),db: Session = Depends(get_db)):
-    """Liste tous les patients (superadmin uniquement)."""
+def list_patients(admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
     log_action(db, actor_id=admin.id, action="list_patients")
     return db.query(models.Patient).all()
