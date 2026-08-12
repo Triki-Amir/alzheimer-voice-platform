@@ -1,5 +1,7 @@
 import json
-
+import logging
+ 
+logger = logging.getLogger(__name__)
 
 def _merge_segments(segments: list[dict]) -> list[dict]:
     ordered = sorted(
@@ -18,22 +20,57 @@ def _merge_segments(segments: list[dict]) -> list[dict]:
     return merged
 
 
-def build_pause_metrics(segments: list[dict], total_duration: float) -> dict:
+def build_pause_metrics(
+    segments: list[dict],
+    total_duration: float,
+    labeled_segments: list[dict] = None,
+) -> dict:
+    """
+    segments: VAD-detected PATIENT speech intervals on masked_full.wav.
+              This remains the source of truth for speech/silence timing --
+              VAD is purpose-built for that; diarization turn boundaries are
+              coarser and should not replace it.
+    labeled_segments: full doctor+patient diarization list (from
+              assign_roles). Used ONLY to subtract real doctor speaking time
+              that falls inside a gap between two patient VAD segments.
+              Without this, a doctor's real question is fully counted as
+              patient pause time, which is incorrect.
+    """
     merged = _merge_segments(segments)
     speech_duration = sum(s["end"] - s["start"] for s in merged)
-    pauses = []
+ 
+    def doctor_time_within(gap_start: float, gap_end: float) -> float:
+        if not labeled_segments:
+            return 0.0
+        total = 0.0
+        for seg in labeled_segments:
+            if seg["role"] != "doctor":
+                continue
+            overlap_start = max(gap_start, seg["start"])
+            overlap_end = min(gap_end, seg["end"])
+            if overlap_start < overlap_end:
+                total += overlap_end - overlap_start
+        return total
+ 
+    raw_gaps = []
     if merged:
         if merged[0]["start"] > 0:
-            pauses.append(merged[0]["start"])
+            raw_gaps.append((0.0, merged[0]["start"]))
         for left, right in zip(merged, merged[1:]):
-            gap = max(0.0, right["start"] - left["end"])
-            if gap > 0:
-                pauses.append(gap)
+            if right["start"] > left["end"]:
+                raw_gaps.append((left["end"], right["start"]))
         if total_duration > merged[-1]["end"]:
-            pauses.append(total_duration - merged[-1]["end"])
+            raw_gaps.append((merged[-1]["end"], total_duration))
     else:
-        pauses.append(total_duration)
-
+        raw_gaps.append((0.0, total_duration))
+ 
+    pauses = []
+    for start, end in raw_gaps:
+        gap_dur = end - start
+        remainder = max(0.0, gap_dur - doctor_time_within(start, end))
+        if remainder > 0.01:
+            pauses.append(remainder)
+ 
     pause_duration = sum(pauses)
     return {
         "total_duration_seconds": round(float(total_duration), 3),
@@ -53,6 +90,7 @@ def build_preprocessing_metrics(
     pause_metrics: dict,
     patient_audio_duration: float,
     original_audio_duration: float,
+    labeled_segments: list = None,
 ) -> dict:
     """
     Consolide toutes les métriques du prétraitement en un seul objet,

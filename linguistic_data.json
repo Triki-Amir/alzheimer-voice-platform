@@ -1,0 +1,1439 @@
+{
+    "error": "chunk 0: Connection error.; chunk 1: Connection error.",
+    "aligned": false,
+    "sentences": [
+        {
+            "end": 18.48,
+            "start": 0.0,
+            "words": [
+                {
+                    "end": 1.82,
+                    "text": "وبيك",
+                    "start": 0.0
+                },
+                {
+                    "end": 2.22,
+                    "text": "ومرحبين",
+                    "start": 1.82
+                },
+                {
+                    "end": 2.32,
+                    "text": "بيك",
+                    "start": 2.22
+                },
+                {
+                    "end": 2.46,
+                    "text": "انت",
+                    "start": 2.32
+                },
+                {
+                    "end": 2.74,
+                    "text": "زيد",
+                    "start": 2.46
+                },
+                {
+                    "end": 3.96,
+                    "text": "مرحبا",
+                    "start": 2.74
+                },
+                {
+                    "end": 4.18,
+                    "text": "بينا",
+                    "start": 3.96
+                },
+                {
+                    "end": 10.34,
+                    "text": "لا",
+                    "start": 4.18
+                },
+                {
+                    "end": 18.48,
+                    "text": "لا",
+                    "start": 10.34
+                }
+            ],
+            "preceded_by": null,
+            "preceding_pause_dur": 0.0
+        },
+        {
+            "end": 19.84,
+            "start": 18.48,
+            "words": [
+                {
+                    "end": 18.66,
+                    "text": "هو",
+                    "start": 18.48
+                },
+                {
+                    "end": 18.96,
+                    "text": "بيده",
+                    "start": 18.66
+                },
+                {
+                    "end": 19.84,
+                    "text": "معنها",
+                    "start": 18.96
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 1.078
+        },
+        {
+            "end": 22.3,
+            "start": 19.84,
+            "words": [
+                {
+                    "end": 20.3,
+                    "text": "البلايليست",
+                    "start": 19.84
+                },
+                {
+                    "end": 20.74,
+                    "text": "تراكليست",
+                    "start": 20.3
+                },
+                {
+                    "end": 20.9,
+                    "text": "هيا",
+                    "start": 20.74
+                },
+                {
+                    "end": 21.22,
+                    "text": "بيدها",
+                    "start": 20.9
+                },
+                {
+                    "end": 22.3,
+                    "text": "يعنيآ",
+                    "start": 21.22
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 0.388
+        },
+        {
+            "end": 41.88,
+            "start": 22.3,
+            "words": [
+                {
+                    "end": 23.04,
+                    "text": "الغنايات",
+                    "start": 22.3
+                },
+                {
+                    "end": 23.12,
+                    "text": "لي",
+                    "start": 23.04
+                },
+                {
+                    "end": 23.56,
+                    "text": "حافظينهم",
+                    "start": 23.12
+                },
+                {
+                    "end": 23.9,
+                    "text": "العباد",
+                    "start": 23.56
+                },
+                {
+                    "end": 24.1,
+                    "text": "واللي",
+                    "start": 23.9
+                },
+                {
+                    "end": 24.34,
+                    "text": "يحبوها",
+                    "start": 24.1
+                },
+                {
+                    "end": 24.74,
+                    "text": "عالعباد",
+                    "start": 24.34
+                },
+                {
+                    "end": 24.98,
+                    "text": "واللي",
+                    "start": 24.74
+                },
+                {
+                    "end": 25.38,
+                    "text": "ناجحين",
+                    "start": 24.98
+                },
+                {
+                    "end": 26.2,
+                    "text": "فهمتني",
+                    "start": 25.8
+                },
+                {
+                    "end": 27.2,
+                    "text": "ونرجع",
+                    "start": 26.2
+                },
+                {
+                    "end": 27.32,
+                    "text": "آ",
+                    "start": 27.2
+                },
+                {
+                    "end": 27.86,
+                    "text": "bon",
+                    "start": 27.32
+                },
+                {
+                    "end": 28.06,
+                    "text": "des",
+                    "start": 27.86
+                },
+                {
+                    "end": 28.2,
+                    "text": "fois",
+                    "start": 28.06
+                },
+                {
+                    "end": 28.52,
+                    "text": "نرجع",
+                    "start": 28.2
+                },
+                {
+                    "end": 28.82,
+                    "text": "الحاجات",
+                    "start": 28.52
+                },
+                {
+                    "end": 29.26,
+                    "text": "مالقديم",
+                    "start": 28.82
+                },
+                {
+                    "end": 29.58,
+                    "text": "خاطر",
+                    "start": 29.26
+                },
+                {
+                    "end": 29.72,
+                    "text": "youtube",
+                    "start": 29.58
+                },
+                {
+                    "end": 29.9,
+                    "text": "هو",
+                    "start": 29.72
+                },
+                {
+                    "end": 30.44,
+                    "text": "مني",
+                    "start": 29.9
+                },
+                {
+                    "end": 30.78,
+                    "text": "القديم",
+                    "start": 30.44
+                },
+                {
+                    "end": 31.56,
+                    "text": "فهمت",
+                    "start": 30.78
+                },
+                {
+                    "end": 31.86,
+                    "text": "mais",
+                    "start": 31.56
+                },
+                {
+                    "end": 32.34,
+                    "text": "ال",
+                    "start": 31.86
+                },
+                {
+                    "end": 32.58,
+                    "text": "playlist",
+                    "start": 32.34
+                },
+                {
+                    "end": 34.52,
+                    "text": "pratiquement",
+                    "start": 32.58
+                },
+                {
+                    "end": 34.7,
+                    "text": "هي",
+                    "start": 34.52
+                },
+                {
+                    "end": 41.88,
+                    "text": "بيضاcontra",
+                    "start": 34.7
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 0.484
+        },
+        {
+            "end": 43.5,
+            "start": 41.88,
+            "words": [
+                {
+                    "end": 42.74,
+                    "text": "انو",
+                    "start": 41.88
+                },
+                {
+                    "end": 43.5,
+                    "text": "معناها",
+                    "start": 42.74
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 0.891
+        },
+        {
+            "end": 45.62,
+            "start": 43.5,
+            "words": [
+                {
+                    "end": 43.96,
+                    "text": "تقسي",
+                    "start": 43.5
+                },
+                {
+                    "end": 45.62,
+                    "text": "دي",
+                    "start": 43.96
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 0.516
+        },
+        {
+            "end": 53.28,
+            "start": 45.62,
+            "words": [
+                {
+                    "end": 45.84,
+                    "text": "رابور",
+                    "start": 45.62
+                },
+                {
+                    "end": 45.98,
+                    "text": "ما",
+                    "start": 45.84
+                },
+                {
+                    "end": 46.24,
+                    "text": "نحطوش",
+                    "start": 45.98
+                },
+                {
+                    "end": 46.48,
+                    "text": "العباد",
+                    "start": 46.24
+                },
+                {
+                    "end": 46.74,
+                    "text": "الكليكا",
+                    "start": 46.48
+                },
+                {
+                    "end": 46.88,
+                    "text": "في",
+                    "start": 46.74
+                },
+                {
+                    "end": 47.02,
+                    "text": "نفس",
+                    "start": 46.88
+                },
+                {
+                    "end": 47.4,
+                    "text": "الخانع",
+                    "start": 47.02
+                },
+                {
+                    "end": 48.08,
+                    "text": "واش",
+                    "start": 47.4
+                },
+                {
+                    "end": 48.68,
+                    "text": "يهفضوا",
+                    "start": 48.08
+                },
+                {
+                    "end": 48.78,
+                    "text": "ولا",
+                    "start": 48.68
+                },
+                {
+                    "end": 49.18,
+                    "text": "يوقاسو",
+                    "start": 48.78
+                },
+                {
+                    "end": 49.32,
+                    "text": "عليه",
+                    "start": 49.18
+                },
+                {
+                    "end": 50.28,
+                    "text": "فما",
+                    "start": 49.32
+                },
+                {
+                    "end": 50.74,
+                    "text": "اسامي",
+                    "start": 50.28
+                },
+                {
+                    "end": 50.86,
+                    "text": "إلي",
+                    "start": 50.74
+                },
+                {
+                    "end": 51.16,
+                    "text": "قعدة",
+                    "start": 50.86
+                },
+                {
+                    "end": 52.16,
+                    "text": "عندها",
+                    "start": 51.16
+                },
+                {
+                    "end": 52.62,
+                    "text": "publique",
+                    "start": 52.16
+                },
+                {
+                    "end": 53.28,
+                    "text": "ومن",
+                    "start": 52.62
+                }
+            ],
+            "preceded_by": "hesitation_pause",
+            "preceding_pause_dur": 1.22
+        },
+        {
+            "end": 56.82,
+            "start": 53.28,
+            "words": [
+                {
+                    "end": 53.42,
+                    "text": "حق",
+                    "start": 53.28
+                },
+                {
+                    "end": 53.52,
+                    "text": "ال",
+                    "start": 53.42
+                },
+                {
+                    "end": 53.76,
+                    "text": "public",
+                    "start": 53.52
+                },
+                {
+                    "end": 53.96,
+                    "text": "أنو",
+                    "start": 53.76
+                },
+                {
+                    "end": 54.28,
+                    "text": "يشوفهم",
+                    "start": 53.96
+                },
+                {
+                    "end": 54.86,
+                    "text": "عالمسارح",
+                    "start": 54.28
+                },
+                {
+                    "end": 56.82,
+                    "text": "donc",
+                    "start": 54.86
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 0.356
+        },
+        {
+            "end": 72.0,
+            "start": 56.82,
+            "words": [
+                {
+                    "end": 57.6,
+                    "text": "لازم",
+                    "start": 56.82
+                },
+                {
+                    "end": 58.78,
+                    "text": "نعرفش",
+                    "start": 57.6
+                },
+                {
+                    "end": 58.92,
+                    "text": "أنا",
+                    "start": 58.78
+                },
+                {
+                    "end": 60.14,
+                    "text": "يتراجعوا",
+                    "start": 58.92
+                },
+                {
+                    "end": 60.22,
+                    "text": "في",
+                    "start": 60.14
+                },
+                {
+                    "end": 60.44,
+                    "text": "برشا",
+                    "start": 60.22
+                },
+                {
+                    "end": 60.94,
+                    "text": "قرارات",
+                    "start": 60.44
+                },
+                {
+                    "end": 61.06,
+                    "text": "و",
+                    "start": 60.94
+                },
+                {
+                    "end": 61.42,
+                    "text": "قنن",
+                    "start": 61.06
+                },
+                {
+                    "end": 61.66,
+                    "text": "انتي",
+                    "start": 61.42
+                },
+                {
+                    "end": 62.42,
+                    "text": "قنن",
+                    "start": 61.66
+                },
+                {
+                    "end": 63.3,
+                    "text": "القطاع",
+                    "start": 62.42
+                },
+                {
+                    "end": 63.62,
+                    "text": "هذايا",
+                    "start": 63.3
+                },
+                {
+                    "end": 64.14,
+                    "text": "و",
+                    "start": 63.62
+                },
+                {
+                    "end": 64.3,
+                    "text": "بعد",
+                    "start": 64.14
+                },
+                {
+                    "end": 64.58,
+                    "text": "خويا",
+                    "start": 64.28
+                },
+                {
+                    "end": 64.9,
+                    "text": "تحب",
+                    "start": 64.58
+                },
+                {
+                    "end": 66.42,
+                    "text": "تقصي",
+                    "start": 64.9
+                },
+                {
+                    "end": 66.54,
+                    "text": "هو",
+                    "start": 66.42
+                },
+                {
+                    "end": 66.74,
+                    "text": "قصي",
+                    "start": 66.54
+                },
+                {
+                    "end": 67.04,
+                    "text": "اما",
+                    "start": 66.74
+                },
+                {
+                    "end": 67.42,
+                    "text": "قنوا",
+                    "start": 67.14
+                },
+                {
+                    "end": 67.64,
+                    "text": "au",
+                    "start": 67.42
+                },
+                {
+                    "end": 67.82,
+                    "text": "moins",
+                    "start": 67.64
+                },
+                {
+                    "end": 68.1,
+                    "text": "واعتي",
+                    "start": 67.82
+                },
+                {
+                    "end": 68.42,
+                    "text": "فرصه",
+                    "start": 68.1
+                },
+                {
+                    "end": 68.56,
+                    "text": "لل",
+                    "start": 68.42
+                },
+                {
+                    "end": 68.9,
+                    "text": "les",
+                    "start": 68.56
+                },
+                {
+                    "end": 69.06,
+                    "text": "jeunes",
+                    "start": 68.9
+                },
+                {
+                    "end": 69.24,
+                    "text": "talent",
+                    "start": 69.06
+                },
+                {
+                    "end": 69.4,
+                    "text": "على",
+                    "start": 69.24
+                },
+                {
+                    "end": 69.6,
+                    "text": "خاطر",
+                    "start": 69.4
+                },
+                {
+                    "end": 69.86,
+                    "text": "vraiment",
+                    "start": 69.6
+                },
+                {
+                    "end": 70.6,
+                    "text": "عنا",
+                    "start": 69.86
+                },
+                {
+                    "end": 70.78,
+                    "text": "des",
+                    "start": 70.6
+                },
+                {
+                    "end": 71.08,
+                    "text": "rappeurs",
+                    "start": 70.82
+                },
+                {
+                    "end": 72.0,
+                    "text": "إلي",
+                    "start": 71.08
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 0.548
+        },
+        {
+            "end": 77.18,
+            "start": 72.0,
+            "words": [
+                {
+                    "end": 72.4,
+                    "text": "يستحقوا",
+                    "start": 72.0
+                },
+                {
+                    "end": 72.54,
+                    "text": "بش",
+                    "start": 72.4
+                },
+                {
+                    "end": 73.32,
+                    "text": "يطلعوا",
+                    "start": 72.54
+                },
+                {
+                    "end": 73.48,
+                    "text": "في",
+                    "start": 73.32
+                },
+                {
+                    "end": 74.8,
+                    "text": "مهرجانات",
+                    "start": 73.48
+                },
+                {
+                    "end": 75.12,
+                    "text": "كبيره",
+                    "start": 74.8
+                },
+                {
+                    "end": 75.56,
+                    "text": "ويعبيو",
+                    "start": 75.12
+                },
+                {
+                    "end": 75.84,
+                    "text": "نعرفهم",
+                    "start": 75.56
+                },
+                {
+                    "end": 76.24,
+                    "text": "يعبيو",
+                    "start": 75.88
+                },
+                {
+                    "end": 76.48,
+                    "text": "خاطر",
+                    "start": 76.24
+                },
+                {
+                    "end": 76.74,
+                    "text": "عندهم",
+                    "start": 76.48
+                },
+                {
+                    "end": 77.06,
+                    "text": "publique",
+                    "start": 76.74
+                },
+                {
+                    "end": 77.18,
+                    "text": "ما",
+                    "start": 77.06
+                }
+            ],
+            "preceded_by": "sentence_boundary",
+            "preceding_pause_dur": 0.356
+        },
+        {
+            "end": 112.2,
+            "start": 103.36,
+            "words": [
+                {
+                    "end": 104.16,
+                    "text": "شاء",
+                    "start": 103.36
+                },
+                {
+                    "end": 104.2,
+                    "text": "الله",
+                    "start": 104.16
+                },
+                {
+                    "end": 104.42,
+                    "text": "ربي",
+                    "start": 104.2
+                },
+                {
+                    "end": 104.7,
+                    "text": "يخلص",
+                    "start": 104.42
+                },
+                {
+                    "end": 105.08,
+                    "text": "واحلهم",
+                    "start": 104.7
+                },
+                {
+                    "end": 105.6,
+                    "text": "وربي",
+                    "start": 105.08
+                },
+                {
+                    "end": 105.88,
+                    "text": "يظهر",
+                    "start": 105.6
+                },
+                {
+                    "end": 106.16,
+                    "text": "الحق",
+                    "start": 105.88
+                },
+                {
+                    "end": 106.84,
+                    "text": "و",
+                    "start": 106.16
+                },
+                {
+                    "end": 108.36,
+                    "text": "surtout",
+                    "start": 106.84
+                },
+                {
+                    "end": 108.96,
+                    "text": "نستحفظوا",
+                    "start": 108.36
+                },
+                {
+                    "end": 109.06,
+                    "text": "على",
+                    "start": 108.96
+                },
+                {
+                    "end": 109.4,
+                    "text": "أرواحنا",
+                    "start": 109.06
+                },
+                {
+                    "end": 109.72,
+                    "text": "كهو",
+                    "start": 109.4
+                },
+                {
+                    "end": 110.12,
+                    "text": "معناها",
+                    "start": 109.72
+                },
+                {
+                    "end": 110.54,
+                    "text": "هاذيا",
+                    "start": 110.12
+                },
+                {
+                    "end": 111.14,
+                    "text": "ونعرفوا",
+                    "start": 110.54
+                },
+                {
+                    "end": 111.44,
+                    "text": "نختاروا",
+                    "start": 111.14
+                },
+                {
+                    "end": 111.56,
+                    "text": "l",
+                    "start": 111.44
+                },
+                {
+                    "end": 111.78,
+                    "text": "'entourage",
+                    "start": 111.56
+                },
+                {
+                    "end": 112.2,
+                    "text": "متاعنا",
+                    "start": 111.78
+                }
+            ],
+            "preceded_by": "hesitation_pause",
+            "preceding_pause_dur": 1.156
+        }
+    ],
+    "tokens_pos": [
+        {
+            "mot": "وبيك",
+            "pos": null
+        },
+        {
+            "mot": "ومرحبين",
+            "pos": null
+        },
+        {
+            "mot": "بيك",
+            "pos": null
+        },
+        {
+            "mot": "انت",
+            "pos": null
+        },
+        {
+            "mot": "زيد",
+            "pos": null
+        },
+        {
+            "mot": "مرحبا",
+            "pos": null
+        },
+        {
+            "mot": "بينا",
+            "pos": null
+        },
+        {
+            "mot": "لا",
+            "pos": null
+        },
+        {
+            "mot": "لا",
+            "pos": null
+        },
+        {
+            "mot": "هو",
+            "pos": null
+        },
+        {
+            "mot": "بيده",
+            "pos": null
+        },
+        {
+            "mot": "معنها",
+            "pos": null
+        },
+        {
+            "mot": "البلايليست",
+            "pos": null
+        },
+        {
+            "mot": "تراكليست",
+            "pos": null
+        },
+        {
+            "mot": "هيا",
+            "pos": null
+        },
+        {
+            "mot": "بيدها",
+            "pos": null
+        },
+        {
+            "mot": "يعنيآ",
+            "pos": null
+        },
+        {
+            "mot": "الغنايات",
+            "pos": null
+        },
+        {
+            "mot": "لي",
+            "pos": null
+        },
+        {
+            "mot": "حافظينهم",
+            "pos": null
+        },
+        {
+            "mot": "العباد",
+            "pos": null
+        },
+        {
+            "mot": "واللي",
+            "pos": null
+        },
+        {
+            "mot": "يحبوها",
+            "pos": null
+        },
+        {
+            "mot": "عالعباد",
+            "pos": null
+        },
+        {
+            "mot": "واللي",
+            "pos": null
+        },
+        {
+            "mot": "ناجحين",
+            "pos": null
+        },
+        {
+            "mot": "فهمتني",
+            "pos": null
+        },
+        {
+            "mot": "ونرجع",
+            "pos": null
+        },
+        {
+            "mot": "آ",
+            "pos": null
+        },
+        {
+            "mot": "bon",
+            "pos": null
+        },
+        {
+            "mot": "des",
+            "pos": null
+        },
+        {
+            "mot": "fois",
+            "pos": null
+        },
+        {
+            "mot": "نرجع",
+            "pos": null
+        },
+        {
+            "mot": "الحاجات",
+            "pos": null
+        },
+        {
+            "mot": "مالقديم",
+            "pos": null
+        },
+        {
+            "mot": "خاطر",
+            "pos": null
+        },
+        {
+            "mot": "youtube",
+            "pos": null
+        },
+        {
+            "mot": "هو",
+            "pos": null
+        },
+        {
+            "mot": "مني",
+            "pos": null
+        },
+        {
+            "mot": "القديم",
+            "pos": null
+        },
+        {
+            "mot": "فهمت",
+            "pos": null
+        },
+        {
+            "mot": "mais",
+            "pos": null
+        },
+        {
+            "mot": "ال",
+            "pos": null
+        },
+        {
+            "mot": "playlist",
+            "pos": null
+        },
+        {
+            "mot": "pratiquement",
+            "pos": null
+        },
+        {
+            "mot": "هي",
+            "pos": null
+        },
+        {
+            "mot": "بيضاcontra",
+            "pos": null
+        },
+        {
+            "mot": "انو",
+            "pos": null
+        },
+        {
+            "mot": "معناها",
+            "pos": null
+        },
+        {
+            "mot": "تقسي",
+            "pos": null
+        },
+        {
+            "mot": "دي",
+            "pos": null
+        },
+        {
+            "mot": "رابور",
+            "pos": null
+        },
+        {
+            "mot": "ما",
+            "pos": null
+        },
+        {
+            "mot": "نحطوش",
+            "pos": null
+        },
+        {
+            "mot": "العباد",
+            "pos": null
+        },
+        {
+            "mot": "الكليكا",
+            "pos": null
+        },
+        {
+            "mot": "في",
+            "pos": null
+        },
+        {
+            "mot": "نفس",
+            "pos": null
+        },
+        {
+            "mot": "الخانع",
+            "pos": null
+        },
+        {
+            "mot": "واش",
+            "pos": null
+        },
+        {
+            "mot": "يهفضوا",
+            "pos": null
+        },
+        {
+            "mot": "ولا",
+            "pos": null
+        },
+        {
+            "mot": "يوقاسو",
+            "pos": null
+        },
+        {
+            "mot": "عليه",
+            "pos": null
+        },
+        {
+            "mot": "فما",
+            "pos": null
+        },
+        {
+            "mot": "اسامي",
+            "pos": null
+        },
+        {
+            "mot": "إلي",
+            "pos": null
+        },
+        {
+            "mot": "قعدة",
+            "pos": null
+        },
+        {
+            "mot": "عندها",
+            "pos": null
+        },
+        {
+            "mot": "publique",
+            "pos": null
+        },
+        {
+            "mot": "ومن",
+            "pos": null
+        },
+        {
+            "mot": "حق",
+            "pos": null
+        },
+        {
+            "mot": "ال",
+            "pos": null
+        },
+        {
+            "mot": "public",
+            "pos": null
+        },
+        {
+            "mot": "أنو",
+            "pos": null
+        },
+        {
+            "mot": "يشوفهم",
+            "pos": null
+        },
+        {
+            "mot": "عالمسارح",
+            "pos": null
+        },
+        {
+            "mot": "donc",
+            "pos": null
+        },
+        {
+            "mot": "لازم",
+            "pos": null
+        },
+        {
+            "mot": "نعرفش",
+            "pos": null
+        },
+        {
+            "mot": "أنا",
+            "pos": null
+        },
+        {
+            "mot": "يتراجعوا",
+            "pos": null
+        },
+        {
+            "mot": "في",
+            "pos": null
+        },
+        {
+            "mot": "برشا",
+            "pos": null
+        },
+        {
+            "mot": "قرارات",
+            "pos": null
+        },
+        {
+            "mot": "و",
+            "pos": null
+        },
+        {
+            "mot": "قنن",
+            "pos": null
+        },
+        {
+            "mot": "انتي",
+            "pos": null
+        },
+        {
+            "mot": "قنن",
+            "pos": null
+        },
+        {
+            "mot": "القطاع",
+            "pos": null
+        },
+        {
+            "mot": "هذايا",
+            "pos": null
+        },
+        {
+            "mot": "و",
+            "pos": null
+        },
+        {
+            "mot": "بعد",
+            "pos": null
+        },
+        {
+            "mot": "خويا",
+            "pos": null
+        },
+        {
+            "mot": "تحب",
+            "pos": null
+        },
+        {
+            "mot": "تقصي",
+            "pos": null
+        },
+        {
+            "mot": "هو",
+            "pos": null
+        },
+        {
+            "mot": "قصي",
+            "pos": null
+        },
+        {
+            "mot": "اما",
+            "pos": null
+        },
+        {
+            "mot": "قنوا",
+            "pos": null
+        },
+        {
+            "mot": "au",
+            "pos": null
+        },
+        {
+            "mot": "moins",
+            "pos": null
+        },
+        {
+            "mot": "واعتي",
+            "pos": null
+        },
+        {
+            "mot": "فرصه",
+            "pos": null
+        },
+        {
+            "mot": "لل",
+            "pos": null
+        },
+        {
+            "mot": "les",
+            "pos": null
+        },
+        {
+            "mot": "jeunes",
+            "pos": null
+        },
+        {
+            "mot": "talent",
+            "pos": null
+        },
+        {
+            "mot": "على",
+            "pos": null
+        },
+        {
+            "mot": "خاطر",
+            "pos": null
+        },
+        {
+            "mot": "vraiment",
+            "pos": null
+        },
+        {
+            "mot": "عنا",
+            "pos": null
+        },
+        {
+            "mot": "des",
+            "pos": null
+        },
+        {
+            "mot": "rappeurs",
+            "pos": null
+        },
+        {
+            "mot": "إلي",
+            "pos": null
+        },
+        {
+            "mot": "يستحقوا",
+            "pos": null
+        },
+        {
+            "mot": "بش",
+            "pos": null
+        },
+        {
+            "mot": "يطلعوا",
+            "pos": null
+        },
+        {
+            "mot": "في",
+            "pos": null
+        },
+        {
+            "mot": "مهرجانات",
+            "pos": null
+        },
+        {
+            "mot": "كبيره",
+            "pos": null
+        },
+        {
+            "mot": "ويعبيو",
+            "pos": null
+        },
+        {
+            "mot": "نعرفهم",
+            "pos": null
+        },
+        {
+            "mot": "يعبيو",
+            "pos": null
+        },
+        {
+            "mot": "خاطر",
+            "pos": null
+        },
+        {
+            "mot": "عندهم",
+            "pos": null
+        },
+        {
+            "mot": "publique",
+            "pos": null
+        },
+        {
+            "mot": "ما",
+            "pos": null
+        },
+        {
+            "mot": "شاء",
+            "pos": null
+        },
+        {
+            "mot": "الله",
+            "pos": null
+        },
+        {
+            "mot": "ربي",
+            "pos": null
+        },
+        {
+            "mot": "يخلص",
+            "pos": null
+        },
+        {
+            "mot": "واحلهم",
+            "pos": null
+        },
+        {
+            "mot": "وربي",
+            "pos": null
+        },
+        {
+            "mot": "يظهر",
+            "pos": null
+        },
+        {
+            "mot": "الحق",
+            "pos": null
+        },
+        {
+            "mot": "و",
+            "pos": null
+        },
+        {
+            "mot": "surtout",
+            "pos": null
+        },
+        {
+            "mot": "نستحفظوا",
+            "pos": null
+        },
+        {
+            "mot": "على",
+            "pos": null
+        },
+        {
+            "mot": "أرواحنا",
+            "pos": null
+        },
+        {
+            "mot": "كهو",
+            "pos": null
+        },
+        {
+            "mot": "معناها",
+            "pos": null
+        },
+        {
+            "mot": "هاذيا",
+            "pos": null
+        },
+        {
+            "mot": "ونعرفوا",
+            "pos": null
+        },
+        {
+            "mot": "نختاروا",
+            "pos": null
+        },
+        {
+            "mot": "l",
+            "pos": null
+        },
+        {
+            "mot": "'entourage",
+            "pos": null
+        },
+        {
+            "mot": "متاعنا",
+            "pos": null
+        }
+    ],
+    "texte_original": "وبيك ومرحبين بيك انت زيد مرحبا بينا لا لا هو بيده معنها البلايليست تراكليست هيا بيدها يعنيآ الغنايات لي حافظينهم العباد واللي يحبوها عالعباد واللي ناجحين فهمتني ونرجع آ bon des fois نرجع الحاجات مالقديم خاطر youtube هو مني القديم فهمت mais ال playlist pratiquement هي بيضاcontra انو معناها تقسي دي رابور ما نحطوش العباد الكليكا في نفس الخانع واش يهفضوا ولا يوقاسو عليه فما اسامي إلي قعدة عندها publique ومن حق ال public أنو يشوفهم عالمسارح donc لازم نعرفش أنا يتراجعوا في برشا قرارات و قنن انتي قنن القطاع هذايا و بعد خويا تحب تقصي هو قصي اما قنوا au moins واعتي فرصه لل les jeunes talent على خاطر vraiment عنا des rappeurs إلي يستحقوا بش يطلعوا في مهرجانات كبيره ويعبيو نعرفهم يعبيو خاطر عندهم publique ما شاء الله ربي يخلص واحلهم وربي يظهر الحق و surtout نستحفظوا على أرواحنا كهو معناها هاذيا ونعرفوا نختاروا l 'entourage متاعنا",
+    "significant_pause_count": 2
+}

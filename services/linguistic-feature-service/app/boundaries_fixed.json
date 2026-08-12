@@ -1,0 +1,121 @@
+[
+  {
+    "start": 3.358,
+    "end": 3.618,
+    "duration": 0.195,
+    "raw_duration": 0.26,
+    "type": "phrase_boundary"
+  },
+  {
+    "start": 4.798,
+    "end": 18.338,
+    "duration": 1.078,
+    "raw_duration": 13.54,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 19.294,
+    "end": 19.682,
+    "duration": 0.388,
+    "raw_duration": 0.388,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 21.662,
+    "end": 22.146,
+    "duration": 0.484,
+    "raw_duration": 0.484,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 35.294,
+    "end": 41.602,
+    "duration": 0.891,
+    "raw_duration": 6.308,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 42.302,
+    "end": 42.818,
+    "duration": 0.516,
+    "raw_duration": 0.516,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 44.318,
+    "end": 45.538,
+    "duration": 1.22,
+    "raw_duration": 1.22,
+    "type": "hesitation_pause"
+  },
+  {
+    "start": 47.71,
+    "end": 47.938,
+    "duration": 0.228,
+    "raw_duration": 0.228,
+    "type": "phrase_boundary"
+  },
+  {
+    "start": 49.79,
+    "end": 50.114,
+    "duration": 0.324,
+    "raw_duration": 0.324,
+    "type": "phrase_boundary"
+  },
+  {
+    "start": 51.582,
+    "end": 51.874,
+    "duration": 0.292,
+    "raw_duration": 0.292,
+    "type": "phrase_boundary"
+  },
+  {
+    "start": 52.798,
+    "end": 53.154,
+    "duration": 0.356,
+    "raw_duration": 0.356,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 55.134,
+    "end": 55.682,
+    "duration": 0.548,
+    "raw_duration": 0.548,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 65.918,
+    "end": 66.082,
+    "duration": 0.164,
+    "raw_duration": 0.164,
+    "type": "phrase_boundary"
+  },
+  {
+    "start": 71.486,
+    "end": 71.842,
+    "duration": 0.356,
+    "raw_duration": 0.356,
+    "type": "sentence_boundary"
+  },
+  {
+    "start": 78.142,
+    "end": 94.658,
+    "duration": 1.156,
+    "raw_duration": 16.516,
+    "type": "hesitation_pause"
+  },
+  {
+    "start": 97.758,
+    "end": 98.05,
+    "duration": 0.292,
+    "raw_duration": 0.292,
+    "type": "phrase_boundary"
+  },
+  {
+    "start": 112.862,
+    "end": 115.01,
+    "duration": 0.043,
+    "raw_duration": 2.148,
+    "type": "phrase_boundary"
+  }
+]

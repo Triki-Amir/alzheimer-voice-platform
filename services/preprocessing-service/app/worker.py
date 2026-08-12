@@ -13,9 +13,10 @@ from voiceplatform_shared.minio_client import get_minio_client
 
 from .cleaning import clean_audio
 from .diarize import run_diarization
-from .extract import extract_patient_segments
+from .extract import mask_doctor_audio  # replaces extract_patient_segments
 from .metrics import build_pause_metrics, build_preprocessing_metrics, write_json
 from .role_heuristic import assign_roles
+from .sentence_boundaries import detect_sentence_boundaries
 from .vad import run_vad
 
 logging.basicConfig(level=logging.INFO)
@@ -41,16 +42,16 @@ def process(self, message: dict):
         with tempfile.TemporaryDirectory() as tmp:
             raw_local = os.path.join(tmp, "raw.wav")
             cleaned_local = os.path.join(tmp, "cleaned.wav")
-            patient_local = os.path.join(tmp, "patient.wav")
+            masked_local = os.path.join(tmp, "masked_full.wav")
 
             # MinIO Download
             t_sub = time.perf_counter()
             minio.fget_object("raw-audio", msg.raw_audio_path, raw_local)
             original_duration = AudioSegment.from_wav(raw_local).duration_seconds
-            logger.info("  ├─ 📥 [MinIO] Downloaded raw audio (%.2fs duration) in %.2fs", 
+            logger.info("  ├─ 📥 [MinIO] Downloaded raw audio (%.2fs duration) in %.2fs",
                         original_duration, time.perf_counter() - t_sub)
 
-            # Audio Cleaning & VAD
+            # Audio Cleaning
             t_sub = time.perf_counter()
             _, cleaning_metrics = clean_audio(raw_local, cleaned_local)
             cleaned_object_name = f"{session_id}/cleaned.wav"
@@ -64,8 +65,8 @@ def process(self, message: dict):
             diar_time = time.perf_counter() - t_sub
 
             confidence_score = (
-                diarization_confidence.get('similarity_score', 0.0) 
-                if isinstance(diarization_confidence, dict) 
+                diarization_confidence.get('similarity_score', 0.0)
+                if isinstance(diarization_confidence, dict)
                 else diarization_confidence
             )
             logger.info(
@@ -73,42 +74,75 @@ def process(self, message: dict):
                 diar_time,
                 confidence_score
             )
-
-            # Patient Segment Extraction
+            labeled_segments_local = os.path.join(tmp, "labeled_segments.json")
+            with open(labeled_segments_local, "w", encoding="utf-8") as f:
+                json.dump(segments, f, indent=2, ensure_ascii=False)
+            labeled_segments_object_name = f"{session_id}/labeled_segments.json"
+            minio.fput_object("patient-audio", labeled_segments_object_name, labeled_segments_local)
+            logger.info("  ├─ 💾 [Debug] Saved labeled_segments.json to MinIO")
+            
+            # Mask doctor audio in place -- keeps ORIGINAL timeline intact,
+            # no timestamp remapping needed anywhere downstream
             t_sub = time.perf_counter()
-            patient_object_name = f"{session_id}/patient.wav"
-            _, timestamp_mapping, patient_duration = extract_patient_segments(
-                cleaned_local, segments, patient_local
+            audio_arr, sample_rate = _load_wav_as_array(cleaned_local)
+            masked_arr = mask_doctor_audio(audio_arr, sample_rate, segments)
+            _write_wav_from_array(masked_arr, sample_rate, masked_local)
+            masked_object_name = f"{session_id}/masked_full.wav"
+            minio.fput_object("patient-audio", masked_object_name, masked_local)
+            logger.info("  ├─ 🔇 [Masking] Doctor audio masked in %.2fs", time.perf_counter() - t_sub)
+
+            # VAD on the masked full file -- picks up patient speech only,
+            # doctor sections are literal silence
+            t_sub = time.perf_counter()
+            vad_segments = run_vad(
+                masked_local,
+                threshold=0.3,
+                min_silence_duration_ms=150,
             )
-            minio.fput_object("patient-audio", patient_object_name, patient_local)
-            logger.info("  ├─ ✂️ [Extraction] Patient audio (%.2fs) saved in %.2fs", 
-                        patient_duration, time.perf_counter() - t_sub)
 
-            # Pause Metrics & VAD
-            t_sub = time.perf_counter()
-            vad_segments = run_vad(patient_local)
-            pause_metrics = build_pause_metrics(vad_segments, patient_duration)
-            logger.info("  ├─ 📊 [VAD/Metrics] Computed pause metrics in %.2fs", time.perf_counter() - t_sub)
+            # Pause metrics: labeled_segments passed so doctor turns inside
+            # gaps are subtracted, not counted as patient pause (see metrics.py fix)
+            pause_metrics = build_pause_metrics(
+                segments=vad_segments,
+                total_duration=original_duration,
+                labeled_segments=segments,
+            )
+
+            # Sentence boundaries: same doctor-exclusion fix applied
+            sentence_boundaries = detect_sentence_boundaries(vad_segments, segments)
+
+            logger.info(
+                "  ├─ 📊 [VAD/Metrics] %d pauses, %d sentence boundaries in %.2fs",
+                pause_metrics["pause_count"], len(sentence_boundaries),
+                time.perf_counter() - t_sub,
+            )
 
             # Build Metrics File
             consolidated_metrics = build_preprocessing_metrics(
                 cleaning_metrics=cleaning_metrics,
                 diarization_confidence=diarization_confidence,
                 pause_metrics=pause_metrics,
-                patient_audio_duration=patient_duration,
+                patient_audio_duration=pause_metrics["speech_duration_seconds"],
                 original_audio_duration=original_duration,
+                labeled_segments=segments,
             )
+            consolidated_metrics["sentence_boundaries"] = sentence_boundaries
 
             metrics_local = os.path.join(tmp, "preprocessing_metrics.json")
             write_json(metrics_local, consolidated_metrics)
             metrics_object_name = f"{session_id}/preprocessing_metrics.json"
             minio.fput_object("patient-audio", metrics_object_name, metrics_local)
 
+        # NOTE: "labeled_segments" (doctor+patient) and "sentence_boundaries"
+        # are threaded into metadata here so STT and linguistic-feature
+        # services can consume them downstream -- this is the data that was
+        # previously getting silently dropped between services.
         msg.metadata.update({
             "cleaned_audio_path": cleaned_object_name,
-            "patient_audio_path": patient_object_name,
+            "masked_audio_path": masked_object_name,
             "preprocessing_metrics_path": metrics_object_name,
-            "timestamp_mapping": timestamp_mapping,
+            "labeled_segments": segments,
+            "sentence_boundaries": sentence_boundaries,
             "preprocessing_metrics": consolidated_metrics,
         })
 
@@ -117,7 +151,7 @@ def process(self, message: dict):
         stt_payload = {
             "session_id": session_id,
             "patient_id": patient_id,
-            "patient_audio_path": patient_object_name,
+            "patient_audio_path": masked_object_name,
             "metadata": msg.metadata
         }
 
@@ -128,7 +162,7 @@ def process(self, message: dict):
         )
 
         total_duration = time.perf_counter() - t0
-        logger.info("✅ [SUCCESS] Preprocessing completed in %.2fs | Session: %s -> Sent to STT", 
+        logger.info("✅ [SUCCESS] Preprocessing completed in %.2fs | Session: %s -> Sent to STT",
                     total_duration, session_id)
 
         return {
@@ -140,6 +174,24 @@ def process(self, message: dict):
 
     except Exception as exc:
         total_duration = time.perf_counter() - t0
-        logger.error("❌ [FAILED] Preprocessing failed after %.2fs | Session: %s | Error: %s", 
+        logger.error("❌ [FAILED] Preprocessing failed after %.2fs | Session: %s | Error: %s",
                      total_duration, session_id, str(exc))
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+
+
+def _load_wav_as_array(path: str):
+    """
+    Adjust this to whatever your codebase already uses elsewhere
+    (e.g. soundfile.read, or torchaudio.load then .numpy()) --
+    placeholder using soundfile since it's a common choice for this stack.
+    """
+    import soundfile as sf
+    audio, sr = sf.read(path, dtype="float32")
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)  # should already be mono from clean_audio
+    return audio, sr
+
+
+def _write_wav_from_array(audio, sample_rate, path: str):
+    import soundfile as sf
+    sf.write(path, audio, sample_rate)

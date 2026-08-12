@@ -160,16 +160,22 @@ services:
     container_name: voiceapp_linguistic_feature
     env_file: .env
     environment:
-      - VLLM_BASE_URL=http://vllm-server:8000/v1
-      - VLLM_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ
+      - POS_MODEL_PATH=/models/xlmr-tunisian-pos-final
     command: celery -A app.worker.app worker -l info -Q linguistic_extraction --pool=solo -E
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     depends_on:
       rabbitmq:
         condition: service_healthy
       postgres:
         condition: service_healthy
-      vllm-server:
-        condition: service_healthy
+    volumes:
+      - /home/amir/stage/alzheimer-voice-platform/annotattion_tunisian_training/xlmr-tunisian-pos-final:/models/xlmr-tunisian-pos-final:ro
 
   feature-engineering-service:
     build:
