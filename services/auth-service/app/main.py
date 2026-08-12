@@ -6,7 +6,7 @@ import uuid
 from uuid import UUID
 
 import qrcode
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -195,25 +195,53 @@ def setup_2fa(pre_auth_token: str, db: Session = Depends(get_db)):
 
 
 @app.post("/2fa/confirm", response_model=schemas.TwoFactorConfirmResponse)
-def confirm_2fa(payload: schemas.TwoFactorConfirm, db: Session = Depends(get_db)):
+def confirm_2fa(
+    payload: schemas.TwoFactorConfirm,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     doctor = get_pre_auth_doctor(payload.pre_auth_token, db)
+
     if not doctor.totp_secret:
-        raise HTTPException(status_code=400, detail="Appelez d'abord /2fa/setup")
-    secret = decrypt_secret(doctor.totp_secret, aad=str(doctor.id).encode("ascii"))
-    if not auth.verify_totp_code(secret, payload.code):
-        raise HTTPException(status_code=400, detail="Code TOTP invalide")
+        raise HTTPException(
+            status_code=400,
+            detail="Appelez d'abord /2fa/setup"
+        )
 
-    backup_codes = auth.generate_backup_codes()
-    doctor.totp_enabled = True
-    doctor.backup_codes = json.dumps(auth.hash_backup_codes(backup_codes))
-    db.commit()
-
-    return schemas.TwoFactorConfirmResponse(
-        access_token=auth.create_access_token(doctor),
-        backup_codes=backup_codes,  # affiches UNE SEULE fois, a stocker par le medecin
+    secret = decrypt_secret(
+        doctor.totp_secret,
+        aad=str(doctor.id).encode("ascii")
     )
 
+    if not auth.verify_totp_code(secret, payload.code):
+        raise HTTPException(
+            status_code=400,
+            detail="Code TOTP invalide"
+        )
 
+    backup_codes = auth.generate_backup_codes()
+
+    doctor.totp_enabled = True
+    doctor.backup_codes = json.dumps(
+        auth.hash_backup_codes(backup_codes)
+    )
+    db.commit()
+
+    access_token = auth.create_access_token(doctor)
+
+    response.set_cookie(
+        key="ehealth_auth_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=auth.JWT_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+    return schemas.TwoFactorConfirmResponse(
+        backup_codes=backup_codes,
+    )
 # =============================================================================
 # Etape 2b : verification 2FA a chaque connexion suivante
 # =============================================================================
@@ -268,6 +296,10 @@ def verify(token: str = Depends(oauth2_scheme)):
     if not payload or not auth.is_fully_authenticated(payload):
         raise HTTPException(status_code=401, detail="Token invalide ou 2FA non verifiee")
     return payload
+
+@app.get("/ws-ticket")
+def get_ws_ticket(doctor: models.Doctor = Depends(get_current_doctor)):
+    return {"ticket": auth.create_ws_ticket(doctor)}
 
 
 # =============================================================================

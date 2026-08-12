@@ -198,22 +198,37 @@ export const uploadApi = {
         }
     }
 }
-
 // ===================== WEBSOCKET =====================
+async function fetchWsTicket(): Promise<string | null> {
+    const token = getToken()
+    if (!token) return null
+
+    try {
+        const response = await fetch(`${API_URL}/auth/ws-ticket`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (!response.ok) return null
+        const data = await response.json()
+        return data.ticket
+    } catch {
+        return null
+    }
+}
+
 export const metricsWebSocket = {
-    connect: (
+    connect: async (
         patientId: string,
         onMetrics: (metrics: any) => void,
         onStatus: (status: any) => void,
         onError: (error: string) => void
-    ): WebSocket => {
-        const token = getToken()
-        if (!token) {
+    ): Promise<WebSocket | null> => {
+        const ticket = await fetchWsTicket()
+        if (!ticket) {
             onError('Non authentifié')
-            return null as any
+            return null
         }
 
-        const ws = new WebSocket(`${WS_URL}/ws/metrics?patient_id=${patientId}&token=${token}`)
+        const ws = new WebSocket(`${WS_URL}/ws/metrics?patient_id=${patientId}&ticket=${ticket}`)
 
         ws.onmessage = (event) => {
             try {

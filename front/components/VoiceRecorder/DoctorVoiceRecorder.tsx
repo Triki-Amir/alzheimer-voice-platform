@@ -26,6 +26,11 @@ export default function DoctorVoiceRecorder({
     const streamRef = useRef<MediaStream | null>(null)
     const audioChunksRef = useRef<BlobPart[]>([])
     const timerRef = useRef<NodeJS.Timeout | null>(null)
+    // mediaRecorder.onstop is a closure created once per recording; it would
+    // otherwise capture the `duration` state value from the instant
+    // startRecording() ran (i.e. 0), never seeing the interval's later
+    // updates. Reading a ref instead always gets the live value.
+    const durationRef = useRef(0)
 
     const formatTime = (seconds: number) => {
         const m = Math.floor(seconds / 60)
@@ -62,7 +67,7 @@ export default function DoctorVoiceRecorder({
                 setAudioUrl(url)
                 setIsComplete(true)
                 setIsRecording(false)
-                onRecordingComplete(blob, duration)
+                onRecordingComplete(blob, durationRef.current)
                 if (onRecordingStop) onRecordingStop()
             }
 
@@ -71,10 +76,15 @@ export default function DoctorVoiceRecorder({
             setIsPaused(false)
             setIsComplete(false)
             setDuration(0)
+            durationRef.current = 0
 
             // Timer
             timerRef.current = setInterval(() => {
-                setDuration(prev => prev + 1)
+                setDuration(prev => {
+                    const next = prev + 1
+                    durationRef.current = next
+                    return next
+                })
             }, 1000)
 
             if (onRecordingStart) onRecordingStart()
@@ -91,7 +101,11 @@ export default function DoctorVoiceRecorder({
         if (isPaused) {
             mediaRecorderRef.current.resume()
             timerRef.current = setInterval(() => {
-                setDuration(prev => prev + 1)
+                setDuration(prev => {
+                    const next = prev + 1
+                    durationRef.current = next
+                    return next
+                })
             }, 1000)
         } else {
             mediaRecorderRef.current.pause()
@@ -120,6 +134,7 @@ export default function DoctorVoiceRecorder({
         setAudioUrl(null)
         setIsComplete(false)
         setDuration(0)
+        durationRef.current = 0
         audioChunksRef.current = []
     }
 
