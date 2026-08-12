@@ -9,8 +9,6 @@ interface DoctorVoiceRecorderProps {
     onRecordingStop?: () => void
 }
 
-const REFERENCE_TEXT = "Je m'appelle [Nom], je suis médecin. Ceci est mon enregistrement de référence pour l'application eHealthBridge."
-
 export default function DoctorVoiceRecorder({
     onRecordingComplete,
     onRecordingStart,
@@ -26,11 +24,8 @@ export default function DoctorVoiceRecorder({
     const streamRef = useRef<MediaStream | null>(null)
     const audioChunksRef = useRef<BlobPart[]>([])
     const timerRef = useRef<NodeJS.Timeout | null>(null)
-    // mediaRecorder.onstop is a closure created once per recording; it would
-    // otherwise capture the `duration` state value from the instant
-    // startRecording() ran (i.e. 0), never seeing the interval's later
-    // updates. Reading a ref instead always gets the live value.
-    const durationRef = useRef(0)
+    // ✅ Ref pour suivre la durée en temps réel
+    const durationRef = useRef<number>(0)
 
     const formatTime = (seconds: number) => {
         const m = Math.floor(seconds / 60)
@@ -67,7 +62,11 @@ export default function DoctorVoiceRecorder({
                 setAudioUrl(url)
                 setIsComplete(true)
                 setIsRecording(false)
-                onRecordingComplete(blob, durationRef.current)
+                
+                // ✅ Utiliser la ref pour la durée finale
+                const finalDuration = durationRef.current
+                console.log('🎙️ Durée finale:', finalDuration, 'secondes')
+                onRecordingComplete(blob, finalDuration)
                 if (onRecordingStop) onRecordingStop()
             }
 
@@ -75,16 +74,17 @@ export default function DoctorVoiceRecorder({
             setIsRecording(true)
             setIsPaused(false)
             setIsComplete(false)
+            
+            // ✅ Réinitialiser la durée
             setDuration(0)
             durationRef.current = 0
 
-            // Timer
+            // ✅ Démarrer le timer - met à jour le state ET la ref
+            if (timerRef.current) clearInterval(timerRef.current)
             timerRef.current = setInterval(() => {
-                setDuration(prev => {
-                    const next = prev + 1
-                    durationRef.current = next
-                    return next
-                })
+                durationRef.current += 1
+                setDuration(durationRef.current)
+                console.log('⏱️ Timer:', durationRef.current, 's')
             }, 1000)
 
             if (onRecordingStart) onRecordingStart()
@@ -101,11 +101,8 @@ export default function DoctorVoiceRecorder({
         if (isPaused) {
             mediaRecorderRef.current.resume()
             timerRef.current = setInterval(() => {
-                setDuration(prev => {
-                    const next = prev + 1
-                    durationRef.current = next
-                    return next
-                })
+                durationRef.current += 1
+                setDuration(durationRef.current)
             }, 1000)
         } else {
             mediaRecorderRef.current.pause()
@@ -151,9 +148,9 @@ export default function DoctorVoiceRecorder({
                 </p>
             </div>
 
-            {/* Timer */}
+            {/* Timer - GROS et visible */}
             <div className="text-center mb-4">
-                <div className="text-4xl font-bold text-blue-600 font-mono">
+                <div className={`text-6xl font-bold font-mono ${duration > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
                     {formatTime(duration)}
                 </div>
                 {isRecording && (
@@ -195,7 +192,7 @@ export default function DoctorVoiceRecorder({
             ) : (
                 <div className="space-y-3">
                     <div className="text-center text-green-600 font-bold text-lg">
-                        ✅ Enregistrement terminé !
+                        ✅ Enregistrement terminé ! ({duration}s)
                     </div>
                     {audioUrl && (
                         <div className="space-y-2">

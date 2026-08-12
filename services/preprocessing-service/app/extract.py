@@ -1,48 +1,61 @@
+#extract.py
+"""
+Replaces the old "concatenate patient clips" approach in extract.py.
+
+Instead of building a new, shorter patient-only file (which required a
+timestamp-mapping table back to the original recording), this keeps the
+FULL original audio and just silences the doctor's speech in place.
+Every timestamp downstream (VAD, sentence boundaries, STT) now refers
+directly to the original recording -- no remapping needed anywhere.
+"""
+
 import logging
-from pydub import AudioSegment
+import numpy as np
 
 logger = logging.getLogger(__name__)
-MIN_SEGMENT_MS = 300  # 🟢 FIX: Raised from 100ms to ignore short noise artifacts
 
 
-def extract_patient_segments(audio_path: str, segments: list, output_path: str) -> tuple[str, list, float]:
+def mask_doctor_audio(audio: np.ndarray, sample_rate: int, labeled_segments: list) -> np.ndarray:
     """
-    Concatène uniquement les segments patient, SANS silence de comblement :
-    insérer du silence pour les tours du médecin fausserait ensuite les
-    métriques de pause (le VAD confondrait "médecin parle" et "patient
-    fait une pause"). Le VAD est appliqué APRÈS sur cet audio continu,
-    donc les seules pauses détectées seront de vraies pauses du patient.
+    audio: full mono waveform, shape (n_samples,), already cleaned/resampled.
+    labeled_segments: output of assign_roles() -- list of dicts with
+                       "start", "end", "role" ("doctor"/"patient").
+    Returns a COPY of audio with every doctor-labeled interval zeroed out.
+    Patient audio and all real silence (including inter-turn gaps) are
+    left completely untouched, on the original timeline.
     """
-    audio = AudioSegment.from_wav(audio_path)
-    patient_segments = sorted(
-        [seg for seg in segments if seg.get("role") == "patient"],
-        key=lambda seg: seg["start"],
-    )
-    if not patient_segments:
-        raise ValueError("Aucun segment patient exploitable n'a été trouvé")
+    masked = audio.copy()
+    n_samples = len(masked)
 
-    combined = AudioSegment.empty()
-    timestamp_mapping = []  # traçabilité: position dans patient.wav -> timestamp original
-    cursor_ms = 0
-
-    for seg in patient_segments:
-        start_ms, end_ms = int(seg["start"] * 1000), int(seg["end"] * 1000)
-        if end_ms - start_ms < MIN_SEGMENT_MS:
+    for seg in labeled_segments:
+        if seg["role"] != "doctor":
             continue
-        clip = audio[start_ms:end_ms]
-        combined += clip
-        timestamp_mapping.append({
-            "original_start": seg["start"],
-            "original_end": seg["end"],
-            "patient_audio_start": round(cursor_ms / 1000, 3),
-            "patient_audio_end": round((cursor_ms + len(clip)) / 1000, 3),
-        })
-        cursor_ms += len(clip)
+        start_sample = max(0, int(seg["start"] * sample_rate))
+        end_sample = min(n_samples, int(seg["end"] * sample_rate))
+        if start_sample < end_sample:
+            masked[start_sample:end_sample] = 0.0
 
-    if len(combined) == 0:
-        raise ValueError("Les segments patient calculés sont vides après filtrage")
+    return masked
 
-    combined.export(output_path, format="wav")
-    duration_seconds = len(combined) / 1000
-    logger.info("Segments patient extraits: %d, durée totale: %.2fs", len(timestamp_mapping), duration_seconds)
-    return output_path, timestamp_mapping, duration_seconds
+
+def compute_pause_ratio(labeled_segments: list, total_duration: float) -> dict:
+    """
+    Global pause metric: fraction of the recording where neither speaker
+    was talking. NOTE: this does not distinguish patient hesitation from
+    doctor hesitation or ordinary turn-taking silence -- it's a coarse,
+    whole-recording signal. Keep labeled_segments around separately if you
+    also want per-sentence, patient-attributed pause features later --
+    those need the segment list, not just these aggregate totals.
+    """
+    doctor_time = sum(s["end"] - s["start"] for s in labeled_segments if s["role"] == "doctor")
+    patient_time = sum(s["end"] - s["start"] for s in labeled_segments if s["role"] == "patient")
+    gap_time = max(0.0, total_duration - doctor_time - patient_time)
+
+    return {
+        "total_duration": round(total_duration, 3),
+        "doctor_speaking_time": round(doctor_time, 3),
+        "patient_speaking_time": round(patient_time, 3),
+        "gap_time": round(gap_time, 3),
+        "pause_ratio": round(gap_time / total_duration, 4) if total_duration > 0 else 0.0,
+    }
+

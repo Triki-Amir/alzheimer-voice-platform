@@ -14,10 +14,9 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
         firstName: '',
         lastName: '',
         birthDate: '',
-        phone: '',
-        email: '',
+        dmiId: '',          
         gender: 'Homme',
-        address: ''
+        phone: ''
     })
 
     const [errors, setErrors] = useState<Partial<PatientFormData>>({})
@@ -37,13 +36,11 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
         if (!formData.firstName.trim()) newErrors.firstName = 'Le prénom est requis'
         if (!formData.lastName.trim()) newErrors.lastName = 'Le nom est requis'
         if (!formData.birthDate) newErrors.birthDate = 'La date de naissance est requise'
+        if (!formData.dmiId.trim()) newErrors.dmiId = 'Le DMI_ID est requis'
         
-        if (formData.phone && !/^[0-9+\s]{8,15}$/.test(formData.phone)) {
-            newErrors.phone = 'Numéro de téléphone invalide'
-        }
-        
-        if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-            newErrors.email = 'Email invalide'
+        // Validation du format DMI_ID (ex: DMI-2024-001234)
+        if (formData.dmiId && !/^DMI-\d{4}-\d{6}$/.test(formData.dmiId)) {
+            newErrors.dmiId = 'Format invalide. Exemple: DMI-2024-001234'
         }
 
         setErrors(newErrors)
@@ -59,10 +56,9 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
                 firstName: '',
                 lastName: '',
                 birthDate: '',
-                phone: '',
-                email: '',
+                dmiId: '',
                 gender: 'Homme',
-                address: ''
+                phone: ''
             })
             onClose()
         }
@@ -163,59 +159,41 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
                         </div>
                     </div>
 
-                    {/* Ligne 3: Téléphone + Email */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Téléphone
-                            </label>
-                            <input
-                                type="tel"
-                                name="phone"
-                                value={formData.phone}
-                                onChange={handleChange}
-                                className={`w-full h-12 px-4 border-2 rounded-xl focus:outline-none transition ${
-                                    errors.phone ? 'border-red-500 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-                                }`}
-                                placeholder="+216 24 541 135"
-                            />
-                            {errors.phone && (
-                                <p className="mt-1 text-sm text-red-500">{errors.phone}</p>
-                            )}
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Email
-                            </label>
-                            <input
-                                type="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                className={`w-full h-12 px-4 border-2 rounded-xl focus:outline-none transition ${
-                                    errors.email ? 'border-red-500 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
-                                }`}
-                                placeholder="patient@email.com"
-                            />
-                            {errors.email && (
-                                <p className="mt-1 text-sm text-red-500">{errors.email}</p>
-                            )}
-                        </div>
+                    {/* Ligne 3: DMI_ID */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            DMI_ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            name="dmiId"
+                            value={formData.dmiId}
+                            onChange={handleChange}
+                            className={`w-full h-12 px-4 border-2 rounded-xl focus:outline-none transition ${
+                                errors.dmiId ? 'border-red-500 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
+                            }`}
+                            placeholder="DMI-2024-001234"
+                        />
+                        <p className="mt-1 text-xs text-gray-400">
+                            Format: DMI-AAAA-NNNNNN (ex: DMI-2024-001234)
+                        </p>
+                        {errors.dmiId && (
+                            <p className="mt-1 text-sm text-red-500">{errors.dmiId}</p>
+                        )}
                     </div>
 
                     {/* Ligne 4: Adresse */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Adresse
+                            Phone number
                         </label>
                         <textarea
-                            name="address"
-                            value={formData.address}
+                            name="phone number"
+                            value={formData.phone}
                             onChange={handleChange}
                             rows={2}
                             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition resize-none"
-                            placeholder="Adresse complète"
+                            placeholder="Numéro de téléphone"
                         />
                     </div>
 

@@ -16,30 +16,77 @@ export interface DoctorVoiceReference {
     path: string
     createdAt: string
 }
+// types/index.ts - Ajouter
+
+export interface TestDetail {
+    testId: TestType
+    testName: string
+    date: string
+    duration: number
+    score: number
+    quality: 'excellent' | 'good' | 'poor'
+    diagnosis?: 'control' | 'mci' | 'ad'
+    confidence?: number
+    // Détails spécifiques
+    transcript?: string
+    words?: string[]
+    wordCount?: number
+    speechRate?: number // mots par minute
+    fillerWords?: number
+    repetitions?: number
+    accuracy?: number
+    timeToFirstWord?: number
+    pausePatterns?: {
+        totalPauses: number
+        avgPauseDuration: number
+    }
+    features?: {
+        lexicalRichness: number
+        syntacticComplexity: number
+        responseTime: number
+    }
+}
+
+export interface TestDetailPageProps {
+    patientId: string
+    testId: TestType
+}
+export interface ReportSummary {
+    patientId: string
+    patientName: string
+    patientInitials: string
+    patientColor: string
+    date: string
+    diagnosis: 'control' | 'mci' | 'ad'
+    confidence: number
+    testsCompleted: number
+    totalTests: number
+}
+// types/index.ts
+
+export interface PatientFormData {
+    firstName: string
+    lastName: string
+    birthDate: string
+    dmiId: string         
+    gender: 'Homme' | 'Femme'
+    phone: string
+}
+
 export interface Patient {
     id: string
     name: string
     initials: string
     age: number
-    birthDate: string
     phone?: string
-    email?: string
+    birthDate: string
+    dmiId: string 
     gender?: 'Homme' | 'Femme'
     address?: string
     lastSession: string
     color: string
     createdAt?: string
 }
-export interface PatientFormData {
-    firstName: string
-    lastName: string
-    birthDate: string
-    phone: string
-    email: string
-    gender: 'Homme' | 'Femme'
-    address: string
-}
-
 export type TestType = 
     | 'cookie_theft' 
     | 'fluency' 

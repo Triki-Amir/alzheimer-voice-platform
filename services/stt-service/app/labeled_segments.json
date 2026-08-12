@@ -1,0 +1,206 @@
+[
+  {
+    "start": 0.047843750000000004,
+    "end": 1.0265937500000002,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 1.0265937500000002,
+    "end": 1.12784375,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 1.4653437500000002,
+    "end": 3.03471875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 3.06846875,
+    "end": 3.3215937500000003,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 3.3215937500000003,
+    "end": 3.42284375,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 3.42284375,
+    "end": 3.49034375,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 3.72659375,
+    "end": 4.418468750000001,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 4.755968750000001,
+    "end": 6.4772187500000005,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 6.69659375,
+    "end": 13.868468750000002,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 14.594093750000003,
+    "end": 14.94846875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 14.695343750000003,
+    "end": 18.30659375,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 18.30659375,
+    "end": 19.09971875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 19.605968750000002,
+    "end": 21.54659375,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 22.086593750000002,
+    "end": 35.16471875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 35.36721875,
+    "end": 40.784093750000004,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 41.45909375,
+    "end": 42.134093750000005,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 42.758468750000006,
+    "end": 44.159093750000004,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 45.54284375,
+    "end": 47.534093750000004,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 47.939093750000005,
+    "end": 49.626593750000005,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 50.065343750000004,
+    "end": 51.49971875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 51.76971875,
+    "end": 52.81596875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 53.06909375,
+    "end": 54.97596875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 55.66784375,
+    "end": 61.81034375,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 62.080343750000004,
+    "end": 63.767843750000004,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 64.03784375000001,
+    "end": 65.65784375,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 66.06284375,
+    "end": 71.41221875000001,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 71.78346875,
+    "end": 77.68971875000001,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 78.12846875000001,
+    "end": 81.11534375000001,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 81.99284375,
+    "end": 94.37909375000001,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 94.56471875000001,
+    "end": 106.57971875000001,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 106.64721875000001,
+    "end": 112.41846875,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 112.82346875,
+    "end": 114.96659375,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  },
+  {
+    "start": 114.96659375,
+    "end": 115.40534375,
+    "speaker": "SPEAKER_00",
+    "role": "patient"
+  },
+  {
+    "start": 115.40534375,
+    "end": 115.86096875000001,
+    "speaker": "SPEAKER_01",
+    "role": "doctor"
+  }
+]

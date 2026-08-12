@@ -9,3 +9,5 @@ __pycache__/
 .next/
 node_modules/
 venv_script/
+
+annotattion_tunisian_training

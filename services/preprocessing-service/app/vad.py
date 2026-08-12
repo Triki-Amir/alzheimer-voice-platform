@@ -32,6 +32,12 @@ def run_vad(
     min_silence_duration_ms: int = 200,  # calibré bas pour ne pas fusionner les pauses cliniques courtes
     min_speech_duration_ms: int = 100,
 ) -> list[dict]:
+    """
+    Runs VAD on masked_full.wav (or any audio file).
+    Since doctor sections have been zeroed out by mask_doctor_audio(),
+    VAD will correctly detect only patient speech intervals.
+    No changes needed to VAD logic itself - just point it at the new file.
+    """
     model, utils = get_silero_vad()
     get_speech_timestamps = utils[0]
 
