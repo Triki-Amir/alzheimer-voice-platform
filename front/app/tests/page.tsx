@@ -1,4 +1,4 @@
-'use client'
+// app/tests/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -61,10 +61,8 @@ export default function TestsPage() {
             initials: `${formData.firstName[0]}${formData.lastName[0]}`,
             age: new Date().getFullYear() - new Date(formData.birthDate).getFullYear(),
             birthDate: formData.birthDate,
-            phone: formData.phone,
-            email: formData.email,
+            dmiId: formData.dmiId,
             gender: formData.gender,
-            address: formData.address,
             lastSession: new Date().toLocaleDateString('fr-FR'),
             color: ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][Math.floor(Math.random() * 6)]
         }
@@ -92,9 +90,11 @@ export default function TestsPage() {
         }
     }
 
-    const handleClearSelection = () => {
+    // ✅ Finaliser les tests - Retourne au dashboard
+    const handleFinishTests = () => {
         setSelectedPatient(null)
         localStorage.removeItem('selectedPatient')
+        router.push('/dashboard')
     }
 
     if (isLoading || !user) {
@@ -159,11 +159,12 @@ export default function TestsPage() {
                                 >
                                     ← Retour au patient
                                 </button>
+                                {/* ✅ Bouton "Finaliser les tests" en rouge */}
                                 <button
-                                    onClick={handleClearSelection}
-                                    className="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+                                    onClick={handleFinishTests}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
                                 >
-                                    Changer de patient
+                                    ✅ Finaliser les tests
                                 </button>
                                 <Link
                                     href={`/rapport/${selectedPatient.id}`}

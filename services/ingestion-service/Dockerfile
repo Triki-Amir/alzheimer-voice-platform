@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 WORKDIR /app
+COPY infra/ca/ca.crt /etc/ssl/certs/voiceapp-ca.crt
 COPY shared/ /shared/
 RUN pip install /shared
 COPY services/ingestion-service/requirements.txt .

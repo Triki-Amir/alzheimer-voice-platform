@@ -12,9 +12,9 @@ WORKDIR /app
 COPY shared/ /app/shared
 RUN pip install --no-cache-dir -e /app/shared
 
-COPY services/acoustic-extraction-service/requirements.txt .
+COPY services/acoustic-feature-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY services/acoustic-extraction-service/ .
+COPY services/acoustic-feature-service/ .
 
 CMD ["celery", "-A", "worker.app", "worker", "--loglevel=info", "-P", "solo", "-E"]

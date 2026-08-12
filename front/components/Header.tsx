@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import type { User } from '@/types'
+import { logout } from '@/lib/auth'
 
 interface HeaderProps {
     user: User
@@ -11,7 +12,7 @@ export default function Header({ user }: HeaderProps) {
     const router = useRouter()
 
     const handleLogout = () => {
-        localStorage.removeItem('user')
+        logout()
         localStorage.removeItem('selectedPatient')
         router.push('/')
     }

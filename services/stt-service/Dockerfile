@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+COPY infra/ca/ca.crt /etc/ssl/certs/voiceapp-ca.crt
+
 # Copie et installation des paquets partagés
 COPY shared /app/shared
 RUN pip install --no-cache-dir -e /app/shared

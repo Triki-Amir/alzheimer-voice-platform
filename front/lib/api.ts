@@ -1,7 +1,13 @@
 // lib/api.ts
+//
+// Auth lives in lib/auth.ts (real 2-step password + TOTP flow against
+// auth-service via nginx). This file covers everything that comes after
+// login: patients (also served by auth-service today), reports, uploads.
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
+import { getToken } from '@/lib/auth'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8000'
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8000'
 
 // Types
 export interface ApiResponse<T> {
@@ -9,22 +15,6 @@ export interface ApiResponse<T> {
     data?: T
     error?: string
     message?: string
-}
-
-export interface LoginRequest {
-    email: string
-    password: string
-}
-
-export interface LoginResponse {
-    token: string
-    refresh_token: string
-    user: {
-        id: string
-        email: string
-        name: string
-        role: 'admin' | 'doctor' | 'researcher'
-    }
 }
 
 export interface Patient {
@@ -65,54 +55,20 @@ export interface TestResult {
     confidence?: number
 }
 
-// ===================== AUTH API =====================
-export const authApi = {
-    login: async (email: string, password: string): Promise<ApiResponse<LoginResponse>> => {
-        try {
-            const response = await fetch(`${API_URL}/api/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            })
-            
-            const data = await response.json()
-            
-            if (response.ok && data.token) {
-                // Stocker le token
-                localStorage.setItem('ehealth_auth_token', data.token)
-                localStorage.setItem('ehealth_user', JSON.stringify(data.user))
-                return { success: true, data }
-            }
-            
-            return { success: false, error: data.message || 'Erreur de connexion' }
-        } catch (error) {
-            return { success: false, error: 'Erreur réseau' }
-        }
-    },
-
-    logout: () => {
-        localStorage.removeItem('ehealth_auth_token')
-        localStorage.removeItem('ehealth_user')
-    },
-
-    getToken: (): string | null => {
-        return localStorage.getItem('ehealth_auth_token')
-    },
-
-    getUser: (): LoginResponse['user'] | null => {
-        const user = localStorage.getItem('ehealth_user')
-        return user ? JSON.parse(user) : null
-    }
-}
-
 // ===================== PATIENT API =====================
+// NOTE: patient CRUD lives inside auth-service (not a separate
+// patients/report service), reachable at /auth/patients through nginx.
+// The shapes below (name/initials/color/etc.) are the frontend's mock
+// Patient model and don't match auth-service's PatientOut yet
+// (first_name/last_name/date_of_birth/external_ref) — mapping that is a
+// separate task from wiring the transport itself.
 export const patientsApi = {
     getAll: async (): Promise<ApiResponse<Patient[]>> => {
-        const token = authApi.getToken()
+        const token = getToken()
         if (!token) return { success: false, error: 'Non authentifié' }
 
         try {
-            const response = await fetch(`${API_URL}/api/patients`, {
+            const response = await fetch(`${API_URL}/auth/patients`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const data = await response.json()
@@ -120,37 +76,18 @@ export const patientsApi = {
             if (response.ok) {
                 return { success: true, data }
             }
-            return { success: false, error: data.message }
-        } catch (error) {
-            return { success: false, error: 'Erreur réseau' }
-        }
-    },
-
-    getById: async (id: string): Promise<ApiResponse<Patient>> => {
-        const token = authApi.getToken()
-        if (!token) return { success: false, error: 'Non authentifié' }
-
-        try {
-            const response = await fetch(`${API_URL}/api/patients/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            const data = await response.json()
-            
-            if (response.ok) {
-                return { success: true, data }
-            }
-            return { success: false, error: data.message }
+            return { success: false, error: data.detail }
         } catch (error) {
             return { success: false, error: 'Erreur réseau' }
         }
     },
 
     create: async (patientData: Partial<Patient>): Promise<ApiResponse<Patient>> => {
-        const token = authApi.getToken()
+        const token = getToken()
         if (!token) return { success: false, error: 'Non authentifié' }
 
         try {
-            const response = await fetch(`${API_URL}/api/patients`, {
+            const response = await fetch(`${API_URL}/auth/patients`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -163,7 +100,7 @@ export const patientsApi = {
             if (response.ok) {
                 return { success: true, data }
             }
-            return { success: false, error: data.message }
+            return { success: false, error: data.detail }
         } catch (error) {
             return { success: false, error: 'Erreur réseau' }
         }
@@ -173,7 +110,7 @@ export const patientsApi = {
 // ===================== REPORT API =====================
 export const reportsApi = {
     getByPatientId: async (patientId: string): Promise<ApiResponse<PatientReport>> => {
-        const token = authApi.getToken()
+        const token = getToken()
         if (!token) return { success: false, error: 'Non authentifié' }
 
         try {
@@ -192,7 +129,7 @@ export const reportsApi = {
     },
 
     exportPdf: async (patientId: string): Promise<Blob | null> => {
-        const token = authApi.getToken()
+        const token = getToken()
         if (!token) return null
 
         try {
@@ -218,7 +155,7 @@ export const uploadApi = {
         testType: string,
         onProgress?: (progress: number) => void
     ): Promise<ApiResponse<{ uploadId: string; status: string }>> => {
-        const token = authApi.getToken()
+        const token = getToken()
         if (!token) return { success: false, error: 'Non authentifié' }
 
         try {
@@ -270,7 +207,7 @@ export const metricsWebSocket = {
         onStatus: (status: any) => void,
         onError: (error: string) => void
     ): WebSocket => {
-        const token = authApi.getToken()
+        const token = getToken()
         if (!token) {
             onError('Non authentifié')
             return null as any

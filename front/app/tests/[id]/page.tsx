@@ -1,5 +1,4 @@
-// app/tests/[testId]/page.tsx
-
+// app/tests/[id]/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -14,8 +13,8 @@ import type { User, Patient, Test } from '@/types'
 export default function TestDetailPage() {
     const router = useRouter()
     const params = useParams()
-    const testId = params?.testId as string
-    
+    const testId = params?.id as string
+
     const [user, setUser] = useState<User | null>(null)
     const [patient, setPatient] = useState<Patient | null>(null)
     const [test, setTest] = useState<Test | null>(null)
@@ -29,7 +28,6 @@ export default function TestDetailPage() {
         }
         setUser(JSON.parse(userData))
 
-        // Récupérer le patient sélectionné
         const patientId = localStorage.getItem('selectedPatient')
         if (patientId) {
             const foundPatient = mockPatients.find(p => p.id === patientId)
@@ -38,7 +36,6 @@ export default function TestDetailPage() {
             }
         }
 
-        // Récupérer le test
         const foundTest = mockTests.find(t => t.id === testId)
         if (foundTest) {
             setTest(foundTest)
@@ -70,74 +67,105 @@ export default function TestDetailPage() {
         <>
             <Header user={user} />
             <Navbar active="tests" />
-            <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                {/* Navigation */}
-                <div className="flex items-center gap-4 mb-6">
-                    <Link
-                        href="/tests"
-                        className="text-blue-600 hover:underline text-lg"
-                    >
-                        ← Retour aux tests
-                    </Link>
-                    <span className="text-gray-300">|</span>
-                    <span className="text-gray-500">
-                        Patient: <span className="font-medium text-gray-700">{patient.name}</span>
-                    </span>
+            <main className="max-w-7xl mx-auto px-4 py-4">
+                
+                {/* En-tête */}
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                    <div className="flex items-center gap-3">
+                        <Link href="/tests" className="text-blue-600 hover:underline text-sm font-medium">
+                            ← Retour aux tests
+                        </Link>
+                        <span className="text-gray-300">|</span>
+                        <span className="text-sm text-gray-500">
+                            Patient: <span className="font-medium text-gray-700">{patient.name}</span>
+                        </span>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {patient.id}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-2xl">{test.icon}</span>
+                        <h1 className="text-xl font-bold text-gray-900">{test.name}</h1>
+                        <span className="text-sm text-gray-500">/ {''}</span>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {test.duration}
+                        </span>
+                    </div>
                 </div>
 
-                {/* En-tête du test */}
-                <div className="bg-white border-4 border-gray-200 rounded-3xl p-6 shadow-xl mb-6">
-                    <div className="flex items-start gap-6">
-                        <div className="text-6xl">{test.icon}</div>
-                        <div className="flex-1">
-                            <h1 className="text-3xl font-bold text-gray-900">{test.name}</h1>
-                            <p className="text-xl text-gray-500 mt-1">{test.description}</p>
-                            <div className="flex flex-wrap gap-3 mt-3">
-                                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                                    ⏱️ {test.duration}
-                                </span>
-                                {test.category && (
-                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">
-                                        📂 {test.category}
-                                    </span>
-                                )}
+                {/* Métriques en haut */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2">
+                        <p className="text-xs text-gray-500">Volume</p>
+                        <p className="text-lg font-bold text-blue-600">78%</p>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2">
+                        <p className="text-xs text-gray-500">Clarté</p>
+                        <p className="text-lg font-bold text-green-600">92%</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
+                        <p className="text-xs text-gray-500">Bruit</p>
+                        <p className="text-lg font-bold text-amber-600">12%</p>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-2">
+                        <p className="text-xs text-gray-500">Durée</p>
+                        <p className="text-lg font-bold text-purple-600">2:30</p>
+                    </div>
+                </div>
+
+                {/* Image - PLEINE LARGEUR */}
+                <div className="w-full bg-white border-4 border-gray-200 rounded-2xl p-2 shadow-xl mb-4">
+                    {test.imagePath ? (
+                        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100">
+                            <img
+                                src={test.imagePath}
+                                alt={test.name}
+                                className="object-contain w-full h-full"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement
+                                    target.style.display = 'none'
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center">
+                            <div className="text-center text-gray-400">
+                                <span className="text-6xl block">{test.icon}</span>
+                                <p className="text-xl font-semibold text-gray-600">{test.name}</p>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Instructions */}
-                <div className="bg-blue-50 border-4 border-blue-200 rounded-3xl p-6 shadow-xl mb-6">
-                    <h2 className="text-2xl font-bold text-blue-800 mb-4">📋 Instructions</h2>
-                    <ul className="space-y-3">
-                        {test.instructions?.map((instruction, index) => (
-                            <li key={index} className="flex items-start gap-3 text-lg text-gray-700">
-                                <span className="text-2xl text-blue-500 font-bold">{index + 1}.</span>
-                                <span>{instruction}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-                {/* Bouton Démarrer */}
-                <div className="bg-white border-4 border-gray-200 rounded-3xl p-6 shadow-xl">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Boutons en dessous de l'image */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="md:col-span-1 bg-blue-50 border-2 border-blue-200 rounded-2xl p-3 flex items-center">
                         <div>
-                            <h3 className="text-xl font-semibold text-gray-900">Prêt à commencer ?</h3>
-                            <p className="text-gray-500">
-                                Assurez-vous d'être dans un environnement calme
+                            <p className="text-xs font-medium text-blue-600">📋 Consignes</p>
+                            <p className="text-sm text-blue-800 line-clamp-2">
+                                {test.instructions?.[0] || 'Suivez les instructions'}
                             </p>
                         </div>
+                    </div>
+                    <div className="md:col-span-2">
                         <button
                             onClick={handleStartRecording}
-                            className="px-8 py-4 bg-red-600 text-white text-2xl font-bold rounded-2xl hover:bg-red-700 transition shadow-xl"
+                            className="w-full bg-red-600 text-white text-xl font-bold rounded-2xl hover:bg-red-700 transition shadow-lg py-4 flex items-center justify-center gap-2"
                         >
-                            🔴 Démarrer l'enregistrement
+                            <span>🔴</span> Démarrer l'enregistrement
                         </button>
+                    </div>
+                    <div className="md:col-span-1">
+                        <Link
+                            href="/dashboard"
+                            className="w-full block bg-gray-100 text-gray-700 text-center text-sm font-medium rounded-2xl hover:bg-gray-200 transition py-4"
+                        >
+                            ← Retour au dashboard
+                        </Link>
                     </div>
                 </div>
 
-                <div className="mt-8">
+                <div className="mt-6">
                     <EthicsBanner />
                 </div>
             </main>

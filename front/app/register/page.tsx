@@ -5,6 +5,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import DoctorVoiceRecorder from '@/components/VoiceRecorder/DoctorVoiceRecorder'
+import {
+    registerDoctor,
+    loginStep1,
+    setup2FA,
+    confirm2FA,
+    enrollDoctorVoice,
+    saveSession,
+    AuthError,
+} from '@/lib/auth'
 import type { DoctorRegistrationData, PracticeType } from '@/types'
 
 const HOSPITALS = [
@@ -23,9 +32,20 @@ const PRACTICE_TYPES: { value: PracticeType; label: string }[] = [
     { value: 'other', label: '📋 Autre' }
 ]
 
+// NOTE: le backend (schemas.DoctorRegister) ne stocke aujourd'hui que
+// email / password / name / family_name. Les champs hôpital / type de
+// pratique / téléphone sont conservés côté front (localStorage, keyed par
+// doctor id) pour l'affichage — pas encore de colonne côté auth-service.
+// A migrer vers de vraies colonnes si ces infos doivent être partagées
+// entre navigateurs/appareils.
+const PROFILE_EXTRA_KEY = 'ehealth_doctor_profile_extra'
+
+type Step = 'info' | 'setup-2fa' | 'backup-codes' | 'voice'
+
 export default function RegisterPage() {
     const router = useRouter()
-    const [step, setStep] = useState(1)
+    const [step, setStep] = useState<Step>('info')
+
     const [formData, setFormData] = useState<DoctorRegistrationData>({
         firstName: '',
         lastName: '',
@@ -38,15 +58,21 @@ export default function RegisterPage() {
         clinicAddress: '',
         phone: ''
     })
+
+    // Etat du flow 2FA (identique au login: setup obligatoire à l'inscription)
+    const [preAuthToken, setPreAuthToken] = useState('')
+    const [code, setCode] = useState('')
+    const [qrCodeBase64, setQrCodeBase64] = useState('')
+    const [totpSecret, setTotpSecret] = useState('')
+    const [backupCodes, setBackupCodes] = useState<string[]>([])
+    const [accessToken, setAccessToken] = useState('')
+
     const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null)
     const [voiceDuration, setVoiceDuration] = useState(0)
+
     const [isLoading, setIsLoading] = useState(false)
-    const [isSendingEmail, setIsSendingEmail] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState(false)
-    const [emailSent, setEmailSent] = useState(false)
-    const [verificationCode, setVerificationCode] = useState('')
-    const [enteredCode, setEnteredCode] = useState('')
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target
@@ -59,135 +85,6 @@ export default function RegisterPage() {
         setError(null)
     }
 
-    // ==================== ÉTAPE 1 : ENVOI DU CODE DE VÉRIFICATION ====================
-    const sendVerificationEmail = async () => {
-        if (!formData.email) {
-            setError('Veuillez entrer votre email.')
-            return
-        }
-
-        setIsSendingEmail(true)
-        setError(null)
-
-        try {
-            const code = Math.floor(100000 + Math.random() * 900000).toString()
-            setVerificationCode(code)
-
-            // Simuler l'envoi d'un email
-            await new Promise(resolve => setTimeout(resolve, 1500))
-
-            console.log(`📧 Code de vérification pour ${formData.email}: ${code}`)
-            setEmailSent(true)
-            setError(null)
-
-        } catch (err) {
-            console.error('Erreur envoi email:', err)
-            setError('Erreur lors de l\'envoi de l\'email. Veuillez réessayer.')
-        } finally {
-            setIsSendingEmail(false)
-        }
-    }
-
-    // ==================== ÉTAPE 1 : VÉRIFICATION DU CODE ====================
-    const verifyCode = () => {
-        if (enteredCode === verificationCode) {
-            setStep(2)
-            setError(null)
-        } else {
-            setError('Code de vérification incorrect. Veuillez réessayer.')
-        }
-    }
-
-    // ==================== ÉTAPE 2 : INSCRIPTION FINALE ====================
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setError(null)
-        setIsLoading(true)
-
-        // Validation
-        if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
-            setError('Veuillez remplir tous les champs obligatoires.')
-            setIsLoading(false)
-            return
-        }
-
-        if (formData.practiceType !== 'cabinet' && !formData.hospital) {
-            setError('Veuillez sélectionner un hôpital ou une clinique.')
-            setIsLoading(false)
-            return
-        }
-
-        if (formData.practiceType === 'cabinet' && !formData.clinicName) {
-            setError('Veuillez entrer le nom de votre cabinet.')
-            setIsLoading(false)
-            return
-        }
-
-        if (!voiceBlob) {
-            setError('Veuillez enregistrer votre voix de référence.')
-            setIsLoading(false)
-            return
-        }
-
-        if (voiceDuration < 3) {
-            setError("L'enregistrement doit durer au moins 3 secondes.")
-            setIsLoading(false)
-            return
-        }
-
-        try {
-            // 1. Upload de la voix du médecin
-            const voiceFormData = new FormData()
-            const filename = `${formData.firstName}_${formData.lastName}_${Date.now()}_reference.wav`
-            voiceFormData.append('audio', voiceBlob, filename)
-            voiceFormData.append('firstName', formData.firstName)
-            voiceFormData.append('lastName', formData.lastName)
-            
-            let hospitalValue = formData.hospital
-            if (formData.practiceType === 'cabinet') {
-                hospitalValue = `Cabinet: ${formData.clinicName}`
-            } else if (formData.hospital === 'Autre' && formData.hospitalOther) {
-                hospitalValue = formData.hospitalOther
-            }
-            voiceFormData.append('hospital', hospitalValue)
-            voiceFormData.append('practiceType', formData.practiceType)
-
-            const voiceResponse = await fetch('/api/upload-doctor-voice', {
-                method: 'POST',
-                body: voiceFormData
-            })
-
-            if (!voiceResponse.ok) {
-                throw new Error('Erreur lors de l\'enregistrement de la voix')
-            }
-
-            const voiceResult = await voiceResponse.json()
-
-            // 2. Sauvegarder les données du médecin
-            const doctorData = {
-                ...formData,
-                hospital: hospitalValue,
-                voiceReferenceId: voiceResult.voiceId,
-                voiceReferenceUrl: voiceResult.path,
-                isVerified: true,
-                createdAt: new Date().toISOString()
-            }
-
-            localStorage.setItem('doctorData', JSON.stringify(doctorData))
-
-            setSuccess(true)
-            setTimeout(() => {
-                router.push('/dashboard')
-            }, 2000)
-
-        } catch (err) {
-            console.error('Erreur:', err)
-            setError('Une erreur est survenue. Veuillez réessayer.')
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
     const getHospitalDisplay = (hospital: string) => {
         if (hospital === 'Hôpital Sahloul - Sousse') return '🏥 Sahloul'
         if (hospital === 'Hôpital Charles Nicolle - Tunis') return '🏥 Charles Nicolle'
@@ -195,6 +92,115 @@ export default function RegisterPage() {
         if (hospital === 'Hôpital Militaire - Tunis') return '🏥 Militaire'
         if (hospital === 'Hôpital Fattouma Bourguiba - Monastir') return '🏥 Fattouma Bourguiba'
         return '🏥 Autre'
+    }
+
+    // ==================== ÉTAPE 1 : inscription (email + mdp) ====================
+    const handleInfoSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError(null)
+
+        if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+            setError('Veuillez remplir tous les champs obligatoires.')
+            return
+        }
+        if (formData.practiceType !== 'cabinet' && !formData.hospital) {
+            setError('Veuillez sélectionner un hôpital ou une clinique.')
+            return
+        }
+        if (formData.practiceType === 'cabinet' && !formData.clinicName) {
+            setError('Veuillez entrer le nom de votre cabinet.')
+            return
+        }
+
+        setIsLoading(true)
+        try {
+            // 1. Créer le compte médecin côté auth-service
+            await registerDoctor(formData.email, formData.password, formData.firstName, formData.lastName)
+
+            // 2. Login immédiat pour récupérer le pre_auth_token, puis lancer
+            //    la configuration 2FA obligatoire (la 2FA n'est jamais activée
+            //    par /doctors/register lui-même).
+            const loginResult = await loginStep1(formData.email, formData.password)
+            setPreAuthToken(loginResult.preAuthToken)
+
+            const setup = await setup2FA(loginResult.preAuthToken)
+            setQrCodeBase64(setup.qrCodeBase64)
+            setTotpSecret(setup.secret)
+            setStep('setup-2fa')
+        } catch (err) {
+            setError(describeError(err))
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    // ==================== ÉTAPE 2 : confirmer la 2FA ====================
+    const handleConfirm2FA = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError(null)
+        setIsLoading(true)
+
+        try {
+            const result = await confirm2FA(preAuthToken, code)
+            setAccessToken(result.accessToken)
+            setBackupCodes(result.backupCodes)
+            setStep('backup-codes')
+        } catch (err) {
+            setError(describeError(err))
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    // ==================== ÉTAPE 3 : enregistrement vocal de référence ====================
+    const handleVoiceSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError(null)
+
+        if (!voiceBlob) {
+            setError('Veuillez enregistrer votre voix de référence.')
+            return
+        }
+        if (voiceDuration < 3) {
+            setError("L'enregistrement doit durer au moins 3 secondes.")
+            return
+        }
+
+        setIsLoading(true)
+        try {
+            const filename = `${formData.firstName}_${formData.lastName}_${Date.now()}_reference.wav`
+            await enrollDoctorVoice(accessToken, voiceBlob, filename)
+
+            // Session finale + profil "extra" (hôpital/pratique) en local,
+            // keyé par l'id du médecin extrait du token.
+            const user = saveSession(accessToken)
+            if (user) {
+                let hospitalValue = formData.hospital
+                if (formData.practiceType === 'cabinet') {
+                    hospitalValue = `Cabinet: ${formData.clinicName}`
+                } else if (formData.hospital === 'Autre' && formData.hospitalOther) {
+                    hospitalValue = formData.hospitalOther
+                }
+                const existingRaw = localStorage.getItem(PROFILE_EXTRA_KEY)
+                const existing = existingRaw ? JSON.parse(existingRaw) : {}
+                existing[user.id] = {
+                    practiceType: formData.practiceType,
+                    hospital: hospitalValue,
+                    clinicAddress: formData.clinicAddress,
+                    phone: formData.phone,
+                }
+                localStorage.setItem(PROFILE_EXTRA_KEY, JSON.stringify(existing))
+            }
+
+            setSuccess(true)
+            setTimeout(() => {
+                router.push('/dashboard')
+            }, 1500)
+        } catch (err) {
+            setError(describeError(err))
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -205,30 +211,34 @@ export default function RegisterPage() {
                     <h1 className="text-3xl font-bold text-blue-600">eHealthBridge</h1>
                     <p className="text-gray-500 text-sm">Voix - Alzheimer - IA</p>
                     <h2 className="text-2xl font-bold text-gray-900 mt-4">📝 Inscription Médecin</h2>
-                    
+
                     {/* Indicateur d'étapes */}
-                    <div className="flex items-center justify-center gap-4 mt-4">
-                        <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                                step === 1 ? 'bg-blue-600 text-white' : 'bg-green-500 text-white'
-                            }`}>
-                                {step === 1 ? '1' : '✓'}
-                            </div>
-                            <span className={`text-sm ${step === 1 ? 'font-semibold text-blue-600' : 'text-gray-400'}`}>
-                                Confirmation
-                            </span>
-                        </div>
-                        <div className={`w-16 h-0.5 ${step >= 2 ? 'bg-green-500' : 'bg-gray-300'}`} />
-                        <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                                step === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
-                            }`}>
-                                2
-                            </div>
-                            <span className={`text-sm ${step === 2 ? 'font-semibold text-blue-600' : 'text-gray-400'}`}>
-                                Enregistrement
-                            </span>
-                        </div>
+                    <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
+                        {(['info', 'setup-2fa', 'backup-codes', 'voice'] as Step[]).map((s, i) => {
+                            const order: Step[] = ['info', 'setup-2fa', 'backup-codes', 'voice']
+                            const currentIdx = order.indexOf(step)
+                            const thisIdx = order.indexOf(s)
+                            const labels: Record<Step, string> = {
+                                'info': 'Informations',
+                                'setup-2fa': 'Double authentification',
+                                'backup-codes': 'Codes de secours',
+                                'voice': 'Voix de référence',
+                            }
+                            return (
+                                <div key={s} className="flex items-center gap-2">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                                        thisIdx < currentIdx ? 'bg-green-500 text-white' :
+                                        thisIdx === currentIdx ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
+                                    }`}>
+                                        {thisIdx < currentIdx ? '✓' : i + 1}
+                                    </div>
+                                    <span className={`text-xs ${thisIdx === currentIdx ? 'font-semibold text-blue-600' : 'text-gray-400'}`}>
+                                        {labels[s]}
+                                    </span>
+                                    {i < 3 && <div className="w-6 h-0.5 bg-gray-300 ml-1" />}
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
 
@@ -246,9 +256,8 @@ export default function RegisterPage() {
                             </div>
                         )}
 
-                        {step === 1 ? (
-                            // ==================== ÉTAPE 1 : EMAIL + CODE ====================
-                            <div className="space-y-6">
+                        {step === 'info' && (
+                            <form onSubmit={handleInfoSubmit} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -307,8 +316,11 @@ export default function RegisterPage() {
                                         className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
                                         placeholder="••••••••"
                                         required
-                                        minLength={6}
+                                        minLength={10}
                                     />
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        Au moins 10 caractères, avec une majuscule, une minuscule et un chiffre.
+                                    </p>
                                 </div>
 
                                 <div>
@@ -385,7 +397,7 @@ export default function RegisterPage() {
                                 {formData.hospital === 'Autre' && formData.practiceType !== 'cabinet' && (
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            Nom de l'établissement <span className="text-red-500">*</span>
+                                            Nom de l&apos;établissement <span className="text-red-500">*</span>
                                         </label>
                                         <input
                                             type="text"
@@ -399,49 +411,105 @@ export default function RegisterPage() {
                                     </div>
                                 )}
 
-                                {!emailSent ? (
-                                    <button
-                                        type="button"
-                                        onClick={sendVerificationEmail}
-                                        disabled={isSendingEmail || !formData.email}
-                                        className="w-full py-3 bg-blue-600 text-white text-lg font-bold rounded-2xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isSendingEmail ? '⏳ Envoi en cours...' : '📧 Envoyer le code de confirmation'}
-                                    </button>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <div className="p-4 bg-green-50 border-2 border-green-300 rounded-xl text-green-700">
-                                            ✅ Un code de confirmation a été envoyé à <strong>{formData.email}</strong>
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                Code de confirmation
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={enteredCode}
-                                                onChange={(e) => setEnteredCode(e.target.value)}
-                                                className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
-                                                placeholder="Entrez le code reçu par email"
-                                                maxLength={6}
-                                            />
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={verifyCode}
-                                            className="w-full py-3 bg-green-600 text-white text-lg font-bold rounded-2xl hover:bg-green-700 transition"
-                                        >
-                                            ✅ Vérifier le code
-                                        </button>
+                                <button
+                                    type="submit"
+                                    disabled={isLoading}
+                                    className="w-full py-3 bg-blue-600 text-white text-lg font-bold rounded-2xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isLoading ? '⏳ Création du compte...' : '➡️ Continuer'}
+                                </button>
+
+                                <div className="text-center">
+                                    <Link href="/" className="text-blue-600 hover:underline text-sm font-medium">
+                                        Déjà un compte ? Se connecter
+                                    </Link>
+                                </div>
+                            </form>
+                        )}
+
+                        {step === 'setup-2fa' && (
+                            <div>
+                                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-4">
+                                    <p className="text-blue-800 font-medium">📱 Configurer la double authentification</p>
+                                    <p className="text-blue-600 text-sm mt-1">
+                                        Obligatoire pour tous les médecins. Scannez ce QR code avec Google Authenticator,
+                                        Authy ou une app équivalente, puis entrez le code à 6 chiffres généré.
+                                    </p>
+                                </div>
+
+                                {qrCodeBase64 && (
+                                    <div className="flex justify-center mb-4">
+                                        <img
+                                            src={`data:image/png;base64,${qrCodeBase64}`}
+                                            alt="QR code 2FA"
+                                            className="w-48 h-48 border-2 border-gray-200 rounded-xl"
+                                        />
                                     </div>
                                 )}
+
+                                {totpSecret && (
+                                    <p className="text-xs text-center text-gray-400 mb-4 break-all">
+                                        Ou entrez la clé manuellement : <span className="font-mono">{totpSecret}</span>
+                                    </p>
+                                )}
+
+                                <form onSubmit={handleConfirm2FA} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Code à 6 chiffres
+                                        </label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            value={code}
+                                            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                                            className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none bg-gray-50 text-center text-lg tracking-widest"
+                                            placeholder="000000"
+                                            required
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={isLoading || code.length !== 6}
+                                        className="w-full py-3 bg-blue-600 text-white text-lg font-bold rounded-2xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isLoading ? '⏳ Vérification...' : '✅ Activer la 2FA'}
+                                    </button>
+                                </form>
                             </div>
-                        ) : (
-                            // ==================== ÉTAPE 2 : ENREGISTREMENT VOCAL ====================
-                            <form onSubmit={handleSubmit} className="space-y-6">
+                        )}
+
+                        {step === 'backup-codes' && (
+                            <div>
+                                <h3 className="text-xl font-semibold mb-2">🗝️ Codes de secours</h3>
+                                <p className="text-sm text-gray-500 mb-4">
+                                    Conservez ces codes en lieu sûr. Chacun ne peut être utilisé qu&apos;une seule fois
+                                    si vous perdez l&apos;accès à votre application d&apos;authentification. Ils ne seront
+                                    plus jamais affichés.
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-2 mb-6 p-4 bg-gray-50 rounded-xl border-2 border-gray-200">
+                                    {backupCodes.map((c) => (
+                                        <span key={c} className="font-mono text-sm text-center py-1">{c}</span>
+                                    ))}
+                                </div>
+
+                                <button
+                                    onClick={() => setStep('voice')}
+                                    className="w-full h-12 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition"
+                                >
+                                    J&apos;ai enregistré mes codes → Continuer
+                                </button>
+                            </div>
+                        )}
+
+                        {step === 'voice' && (
+                            <form onSubmit={handleVoiceSubmit} className="space-y-6">
                                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
                                     <p className="text-blue-800 font-medium">
-                                        🔐 Étape 2 : Enregistrement vocal de référence
+                                        🎙️ Enregistrement vocal de référence
                                     </p>
                                     <p className="text-blue-600 text-sm mt-1">
                                         Veuillez enregistrer votre voix pour permettre la distinction entre vous et le patient lors des tests.
@@ -459,22 +527,13 @@ export default function RegisterPage() {
                                     )}
                                 </div>
 
-                                <div className="flex gap-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setStep(1)}
-                                        className="flex-1 py-3 bg-gray-200 text-gray-700 text-lg font-bold rounded-2xl hover:bg-gray-300 transition"
-                                    >
-                                        ← Retour
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isLoading}
-                                        className="flex-1 py-4 bg-blue-600 text-white text-xl font-bold rounded-2xl hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isLoading ? '⏳ Inscription en cours...' : '✅ Finaliser l\'inscription'}
-                                    </button>
-                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={isLoading}
+                                    className="w-full py-4 bg-blue-600 text-white text-xl font-bold rounded-2xl hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isLoading ? '⏳ Envoi en cours...' : "✅ Finaliser l'inscription"}
+                                </button>
                             </form>
                         )}
                     </>
@@ -482,4 +541,14 @@ export default function RegisterPage() {
             </div>
         </div>
     )
+}
+
+function describeError(err: unknown): string {
+    if (err instanceof AuthError) {
+        if (err.status === 0) return 'Impossible de contacter le serveur'
+        if (err.status === 400) return err.message
+        if (err.status === 423) return err.message
+        return err.message
+    }
+    return 'Erreur de connexion au serveur'
 }
