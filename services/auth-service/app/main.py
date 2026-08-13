@@ -274,8 +274,12 @@ def confirm_2fa(
 # =============================================================================
 # Etape 2b : verification 2FA a chaque connexion suivante
 # =============================================================================
-@app.post("/login/verify-2fa", response_model=schemas.Token)
-def verify_2fa(payload: schemas.TwoFactorVerify, response: Response, db: Session = Depends(get_db)):
+@app.post("/login/verify-2fa", response_model=schemas.LoginSuccess)
+def verify_2fa(
+    payload: schemas.TwoFactorVerify,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     doctor = get_pre_auth_doctor(payload.pre_auth_token, db)
     if not doctor.totp_enabled:
         raise HTTPException(status_code=400, detail="2FA non configuree pour ce compte")
@@ -286,7 +290,7 @@ def verify_2fa(payload: schemas.TwoFactorVerify, response: Response, db: Session
             detail="Compte temporairement verrouille. Reessayez plus tard.",
         )
 
-    def _issue_token() -> schemas.Token:
+    def _issue_token() -> schemas.LoginSuccess:
         access_token = auth.create_access_token(doctor)
         response.set_cookie(
             key="ehealth_auth_token",
@@ -298,9 +302,13 @@ def verify_2fa(payload: schemas.TwoFactorVerify, response: Response, db: Session
             path="/",
         )
         set_csrf_cookie(response)
-        return schemas.Token(access_token=access_token)
+        # JWT is only in the cookie — never in the JSON body
+        return schemas.LoginSuccess()
 
-    if auth.verify_totp_code(decrypt_secret(doctor.totp_secret, aad=str(doctor.id).encode("ascii")), payload.code):
+    if auth.verify_totp_code(
+        decrypt_secret(doctor.totp_secret, aad=str(doctor.id).encode("ascii")),
+        payload.code,
+    ):
         doctor.failed_login_attempts = 0
         doctor.locked_until = None
         db.commit()

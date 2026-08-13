@@ -14,7 +14,6 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-const TOKEN_KEY = 'ehealth_auth_token'
 const USER_KEY = 'user'
 
 export type DoctorRole = 'clinician' | 'superadmin'
@@ -121,7 +120,6 @@ export async function registerDoctor(
 
 // ===================== Enrolement vocal (post-2FA) =====================
 export async function enrollDoctorVoice(accessToken: string, audioBlob: Blob, filename: string): Promise<void> {
-    console.log('🔑 Token utilisé:', accessToken ? `${accessToken.slice(0, 20)}...` : '❌ NULL')
     console.log('🎵 Audio:', filename, audioBlob.size, 'bytes')
     console.log('📍 URL voix:', `${API_URL}/doctors/voice-enroll`)
     
@@ -135,16 +133,13 @@ export async function enrollDoctorVoice(accessToken: string, audioBlob: Blob, fi
     try {
         const response = await fetch(`${API_URL}/doctors/voice-enroll`, {
             method: 'POST',
-            headers: { 
-                Authorization: `Bearer ${accessToken}`
-            },
+            credentials: 'include',
             body: formData,
         })
 
         console.log('📝 Status voix:', response.status)
 
         if (response.status === 401) {
-            localStorage.removeItem(TOKEN_KEY)
             localStorage.removeItem(USER_KEY)
             throw new AuthError('Session expirée, veuillez vous reconnecter', 401)
         }
@@ -233,6 +228,7 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
         const response = await fetch(`${API_URL}/2fa/confirm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
         })
 
@@ -242,16 +238,11 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
 
         const data = await response.json()
         console.log('📝 2FA confirm response:', data)
+
         
-        // ✅ Sauvegarder le token immédiatement
-        if (data.access_token) {
-            localStorage.setItem(TOKEN_KEY, data.access_token)
-            console.log('✅ Token sauvegardé dans localStorage')
-        }
-        
-        return { 
-            accessToken: data.access_token, 
-            backupCodes: data.backup_codes || [] 
+        return {
+            accessToken: '',
+            backupCodes: data.backup_codes || [],
         }
     } catch (error) {
         console.error('❌ Erreur confirm 2FA:', error)
@@ -261,37 +252,18 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
 }
 
 // ===================== Etape 2b : verification 2FA =====================
-export async function verify2FA(preAuthToken: string, code: string): Promise<string> {
-    console.log('📍 URL verify 2FA:', `${API_URL}/login/verify-2fa`)
-    
-    try {
-        const response = await fetch(`${API_URL}/login/verify-2fa`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
-        })
-
-        if (!response.ok) {
-            throw new AuthError(await parseErrorDetail(response), response.status)
-        }
-
-        const data = await response.json()
-        console.log('📝 Verify 2FA response:', data)
-        
-        // ✅ Sauvegarder le token
-        if (data.access_token) {
-            localStorage.setItem(TOKEN_KEY, data.access_token)
-            console.log('✅ Token sauvegardé dans localStorage')
-        }
-        
-        return data.access_token as string
-    } catch (error) {
-        console.error('❌ Erreur verify 2FA:', error)
-        if (error instanceof AuthError) throw error
-        throw new AuthError('Impossible de contacter le serveur', 0)
+export async function verify2FA(preAuthToken: string, code: string): Promise<void> {
+    const response = await fetch(`${API_URL}/login/verify-2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
+    })
+DFVRGB THNYJ?UK.IIYTGR5BFE4D3ZSA2Q  1<    if (!response.ok) {
+        throw new AuthError(await parseErrorDetail(response), response.status)
     }
+    // Cookie is set by the backend — nothing to store
 }
-
 // ===================== Session helpers =====================
 
 function decodeJwtPayload(token: string): Record<string, any> | null {
@@ -305,29 +277,37 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
 }
 
 export function saveSession(accessToken: string): AuthUser | null {
-    const payload = decodeJwtPayload(accessToken)
-    if (!payload) return null
-
-    const user: AuthUser = {
-        id: payload.sub,
-        email: payload.email,
-        role: payload.role,
-        name: payload.email?.split('@')[0] ?? 'Docteur',
+    if (accessToken) {
+        const payload = decodeJwtPayload(accessToken)
+        if (payload) {
+            const user: AuthUser = {
+                id: payload.sub,
+                email: payload.email,
+                role: payload.role,
+                name: payload.email?.split('@')[0] ?? 'Docteur',
+            }
+            localStorage.setItem(USER_KEY, JSON.stringify(user))
+            return user
+        }
     }
-
-    localStorage.setItem(TOKEN_KEY, accessToken)
-    localStorage.setItem(USER_KEY, JSON.stringify(user))
-    return user
+    return getUser()
 }
 
-export function logout() {
-    localStorage.removeItem(TOKEN_KEY)
+export async function logout(): Promise<void> {
+    try {
+        await fetch(`${API_URL}/logout`, {
+            method: 'POST',
+            credentials: 'include',
+        })
+    } catch {
+        // ignore network errors on logout
+    }
     localStorage.removeItem(USER_KEY)
+    // Do NOT touch any token key – there shouldn't be one anymore
 }
 
 export function getToken(): string | null {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem(TOKEN_KEY)
+    return null
 }
 
 export function getUser(): AuthUser | null {
@@ -337,17 +317,19 @@ export function getUser(): AuthUser | null {
 }
 
 export function isAuthenticated(): boolean {
-    return !!getToken()
+    return !!getUser()
 }
 
 export async function verifySession(): Promise<boolean> {
-    const token = getToken()
-    if (!token) return false
     try {
         const response = await fetch(`${API_URL}/verify`, {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: 'include',
         })
-        return response.ok
+        if (!response.ok) {
+            localStorage.removeItem(USER_KEY)
+            return false
+        }
+        return true
     } catch {
         return false
     }
