@@ -24,7 +24,7 @@ from voiceplatform_shared.constants import Queues
 app = FastAPI(title="Auth Service")
 
 # ===================== CORS =====================
-# ✅ Suppression du code en double et ajout d'un fallback
+
 _allowed_origins = [
     origin.strip()
     for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")

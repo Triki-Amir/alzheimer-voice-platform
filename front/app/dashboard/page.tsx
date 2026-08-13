@@ -10,7 +10,8 @@ import PatientCard from '@/components/PatientCard'
 import SearchBar from '@/components/SearchBar'
 import EthicsBanner from '@/components/EthicsBanner'
 import PatientForm from '@/components/PatientForm'
-import { mockPatients } from '@/lib/data'
+import { patientsApi } from '@/lib/api'
+import { getToken } from '@/lib/auth'
 import type { Patient, User, PatientFormData } from '@/types'
 
 // ==================== TYPES ====================
@@ -30,7 +31,7 @@ interface Appointment {
     type: 'consultation' | 'test' | 'follow-up'
 }
 
-// ==================== DONNÉES MOCKÉES ====================
+// ==================== DONNÉES MOCKÉES (Calendrier uniquement) ====================
 const mockAppointments: Appointment[] = [
     { id: '1', patientId: 'PAT_000123', patientName: 'Slim Selmi', date: '2026-08-07', time: '09:30', type: 'consultation' },
     { id: '2', patientId: 'PAT_000124', patientName: 'Khalil Hedili', date: '2026-08-07', time: '11:00', type: 'test' },
@@ -40,11 +41,14 @@ const mockAppointments: Appointment[] = [
 ]
 
 const calculateStats = (patients: Patient[]): DashboardStats => {
+    const today = new Date()
+    const currentMonth = today.toISOString().slice(0, 7)
+    
     return {
         totalPatients: patients.length,
         highRisk: patients.filter(p => p.age > 75).length,
         moderateRisk: patients.filter(p => p.age > 65 && p.age <= 75).length,
-        pendingTest: patients.filter(p => p.lastSession < '2026-07-01').length
+        pendingTest: patients.filter(p => !p.lastSession || p.lastSession < '2026-07-01').length
     }
 }
 
@@ -69,15 +73,6 @@ const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
             case 'test': return 'bg-purple-100 text-purple-700'
             case 'follow-up': return 'bg-green-100 text-green-700'
             default: return 'bg-gray-100 text-gray-700'
-        }
-    }
-
-    const getTypeLabel = (type: string) => {
-        switch (type) {
-            case 'consultation': return 'Consultation'
-            case 'test': return 'Test'
-            case 'follow-up': return 'Suivi'
-            default: return type
         }
     }
 
@@ -123,7 +118,6 @@ const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
                 })}
             </div>
 
-            {/* Légende */}
             <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded-full bg-blue-500"></span>
@@ -146,70 +140,105 @@ const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
 export default function DashboardPage() {
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState('')
-    const [patients, setPatients] = useState<Patient[]>(mockPatients)
-    const [filteredPatients, setFilteredPatients] = useState<Patient[]>(mockPatients)
+    const [patients, setPatients] = useState<Patient[]>([])
+    const [filteredPatients, setFilteredPatients] = useState<Patient[]>([])
+    const [isLoading, setIsLoading] = useState(true)
     const [user, setUser] = useState<User | null>(null)
     const [isFormOpen, setIsFormOpen] = useState(false)
-    const [stats, setStats] = useState<DashboardStats>(calculateStats(mockPatients))
+    const [stats, setStats] = useState<DashboardStats>({
+        totalPatients: 0,
+        highRisk: 0,
+        moderateRisk: 0,
+        pendingTest: 0
+    })
     const [activeFilter, setActiveFilter] = useState<'all' | 'highRisk' | 'moderateRisk' | 'pendingTest'>('all')
     const [appointments] = useState<Appointment[]>(mockAppointments)
 
+    // Vérifier l'authentification et charger les patients
     useEffect(() => {
-        const userData = localStorage.getItem('user')
-        if (!userData) {
+        const token = getToken()
+        if (!token) {
             router.push('/')
-        } else {
+            return
+        }
+
+        const userData = localStorage.getItem('user')
+        if (userData) {
             setUser(JSON.parse(userData))
         }
+
+        loadPatients()
     }, [router])
 
+    const loadPatients = async () => {
+        setIsLoading(true)
+        const result = await patientsApi.getAll()
+        if (result.success && result.data) {
+            setPatients(result.data)
+            setStats(calculateStats(result.data))
+        } else {
+            console.error('Erreur chargement patients:', result.error)
+        }
+        setIsLoading(false)
+    }
+
+    // Filtrer les patients
     useEffect(() => {
         let filtered = patients
 
-        // Appliquer le filtre de risque
         if (activeFilter === 'highRisk') {
             filtered = filtered.filter(p => p.age > 75)
         } else if (activeFilter === 'moderateRisk') {
             filtered = filtered.filter(p => p.age > 65 && p.age <= 75)
         } else if (activeFilter === 'pendingTest') {
-            filtered = filtered.filter(p => p.lastSession < '2026-07-01')
+            filtered = filtered.filter(p => !p.lastSession || p.lastSession < '2026-07-01')
         }
 
-        // Appliquer la recherche
         if (searchTerm) {
             filtered = filtered.filter(p =>
                 p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 p.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.phone?.includes(searchTerm)
+                p.phone?.includes(searchTerm) ||
+                p.dmiId?.includes(searchTerm)
             )
         }
 
         setFilteredPatients(filtered)
-        setStats(calculateStats(patients))
     }, [searchTerm, patients, activeFilter])
 
     const handleSelectPatient = (patientId: string) => {
         router.push(`/patient/${patientId}`)
     }
 
-    const handleAddPatient = (formData: PatientFormData) => {
-        const newPatient: Patient = {
-            id: `PAT_${String(patients.length + 1).padStart(6, '0')}`,
-            name: `${formData.firstName} ${formData.lastName}`,
-            initials: `${formData.firstName[0]}${formData.lastName[0]}`,
-            age: new Date().getFullYear() - new Date(formData.birthDate).getFullYear(),
-            birthDate: formData.birthDate,
-            dmiId: formData.dmiId,
-            gender: formData.gender,
-            phone: formData.phone,
-            lastSession: new Date().toLocaleDateString('fr-FR'),
-            color: ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][Math.floor(Math.random() * 6)],
-            createdAt: new Date().toISOString()
+    const handleAddPatient = async (formData: PatientFormData) => {
+        const newPatient = {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            date_of_birth: formData.birthDate,
+            external_ref: formData.dmiId,
         }
 
-        setPatients([newPatient, ...patients])
-        alert(`✅ Patient ${newPatient.name} ajouté avec succès !`)
-        setIsFormOpen(false)
+        const result = await patientsApi.create(newPatient)
+        
+        if (result.success && result.data) {
+            setPatients([result.data, ...patients])
+            setStats(calculateStats([result.data, ...patients]))
+            alert(`✅ Patient ${result.data.name} ajouté avec succès !`)
+            setIsFormOpen(false)
+        } else {
+            alert(`❌ Erreur: ${result.error || 'Impossible d\'ajouter le patient'}`)
+        }
+    }
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Chargement...</p>
+                </div>
+            </div>
+        )
     }
 
     if (!user) {
@@ -217,7 +246,7 @@ export default function DashboardPage() {
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-500">Chargement...</p>
+                    <p className="mt-4 text-gray-500">Redirection...</p>
                 </div>
             </div>
         )
@@ -272,7 +301,7 @@ export default function DashboardPage() {
             <Navbar active="dashboard" />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 
-                {/* ==================== STATISTIQUES CLIQUABLES ==================== */}
+                {/* Statistiques cliquables */}
                 <section className="mb-8">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {statCards.map((stat, index) => (
@@ -299,7 +328,6 @@ export default function DashboardPage() {
                         ))}
                     </div>
 
-                    {/* Indicateur de filtre actif */}
                     {activeFilter !== 'all' && (
                         <div className="mt-3 flex items-center gap-3">
                             <span className="text-sm text-gray-500">Filtre actif :</span>
@@ -316,16 +344,16 @@ export default function DashboardPage() {
                     )}
                 </section>
 
-                {/* ==================== RECHERCHE ==================== */}
+                {/* Recherche */}
                 <section className="mb-6">
                     <SearchBar
                         value={searchTerm}
                         onChange={setSearchTerm}
-                        placeholder="🔍 Rechercher un patient (nom, ID, téléphone...)"
+                        placeholder="🔍 Rechercher un patient (nom, ID, téléphone, DMI_ID...)"
                     />
                 </section>
 
-                {/* ==================== LISTE DES PATIENTS FILTRÉE ==================== */}
+                {/* Liste des patients filtrée */}
                 <section className="mb-8">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                         <h3 className="text-lg font-semibold text-gray-900">
@@ -354,7 +382,7 @@ export default function DashboardPage() {
                                 <p className="text-gray-500 text-sm mt-2">
                                     {activeFilter !== 'all' 
                                         ? 'Aucun patient ne correspond à ce filtre.'
-                                        : 'Commencez par créer une fiche patient pour effectuer des tests.'
+                                        : 'Commencez par créer une fiche patient.'
                                     }
                                 </p>
                                 {activeFilter !== 'all' && (
@@ -400,7 +428,7 @@ export default function DashboardPage() {
                     </div>
                 </section>
 
-                {/* ==================== CALENDRIER ==================== */}
+                {/* Calendrier */}
                 <section className="mb-8">
                     <WeeklyCalendar appointments={appointments} />
                 </section>

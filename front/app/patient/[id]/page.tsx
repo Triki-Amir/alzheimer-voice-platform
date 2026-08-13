@@ -1,3 +1,4 @@
+// app/patient/[id]/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,7 +7,8 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
-import { mockPatients } from '@/lib/data'
+import { patientsApi } from '@/lib/api'
+import { getToken } from '@/lib/auth'
 import type { Patient, User } from '@/types'
 
 interface PatientPageProps {
@@ -20,36 +22,69 @@ export default function PatientPage({ params }: PatientPageProps) {
     const [user, setUser] = useState<User | null>(null)
     const [patient, setPatient] = useState<Patient | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         const loadData = async () => {
-            const userData = localStorage.getItem('user')
-            if (!userData) {
-                router.push('/')
-                return
-            }
-            setUser(JSON.parse(userData))
+            try {
+                // Check authentication
+                const token = getToken()
+                if (!token) {
+                    router.push('/')
+                    return
+                }
 
-            // ✅ Résoudre la promesse params
-            const { id } = await params
+                // Get user data
+                const userData = localStorage.getItem('user')
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+                setUser(JSON.parse(userData))
 
-            if (!id) {
-                router.push('/dashboard')
-                return
-            }
+                // Get patient ID from params
+                const { id } = await params
 
-            // Récupérer le patient
-            const foundPatient = mockPatients.find(p => p.id === id)
-            if (foundPatient) {
-                setPatient(foundPatient)
-            } else {
-                router.push('/dashboard')
+                if (!id) {
+                    router.push('/dashboard')
+                    return
+                }
+
+                // Fetch patient from API
+                await loadPatient(id)
+            } catch (error) {
+                console.error('Error loading patient data:', error)
+                setError('Erreur lors du chargement des données')
+                setIsLoading(false)
             }
-            setIsLoading(false)
         }
 
         loadData()
     }, [router, params])
+
+    const loadPatient = async (patientId: string) => {
+        setIsLoading(true)
+        setError(null)
+        
+        try {
+            const result = await patientsApi.getById(patientId)
+            
+            if (result.success && result.data) {
+                setPatient(result.data)
+            } else {
+                setError(result.error || 'Patient non trouvé')
+                // Redirect after a moment if patient not found
+                setTimeout(() => {
+                    router.push('/dashboard')
+                }, 2000)
+            }
+        } catch (error) {
+            console.error('Error fetching patient:', error)
+            setError('Erreur lors du chargement du patient')
+        } finally {
+            setIsLoading(false)
+        }
+    }
 
     const handleStartTests = () => {
         if (patient) {
@@ -64,12 +99,48 @@ export default function PatientPage({ params }: PatientPageProps) {
         }
     }
 
-    if (isLoading || !user || !patient) {
+    const handleBack = () => {
+        router.push('/dashboard')
+    }
+
+    // Loading state
+    if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-500">Chargement...</p>
+                    <p className="mt-4 text-gray-500">Chargement du patient...</p>
+                </div>
+            </div>
+        )
+    }
+
+    // Error state
+    if (error) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="text-red-500 text-6xl mb-4">⚠️</div>
+                    <h2 className="text-xl font-semibold text-gray-900 mb-2">Erreur</h2>
+                    <p className="text-gray-500">{error}</p>
+                    <button
+                        onClick={handleBack}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    >
+                        Retour au dashboard
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    // No user or no patient
+    if (!user || !patient) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Redirection...</p>
                 </div>
             </div>
         )
@@ -80,37 +151,44 @@ export default function PatientPage({ params }: PatientPageProps) {
             <Header user={user} />
             <Navbar active="patients" />
             <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <Link
-                    href="/dashboard"
+                {/* Back button */}
+                <button
+                    onClick={handleBack}
                     className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6 transition"
                 >
                     ← Retour au dashboard
-                </Link>
+                </button>
 
+                {/* Patient Info Card */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                         <div
                             className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl flex-shrink-0"
-                            style={{ backgroundColor: patient.color }}
+                            style={{ backgroundColor: patient.color || '#3B82F6' }}
                         >
-                            {patient.initials}
+                            {patient.initials || patient.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                         </div>
                         <div className="flex-1 text-center sm:text-left">
                             <h1 className="text-2xl font-bold text-gray-900">{patient.name}</h1>
                             <div className="flex flex-wrap justify-center sm:justify-start gap-4 text-sm text-gray-500 mt-1">
                                 <span>ID: {patient.id}</span>
-                                <span>⭐ {patient.age} ans</span>
-                                <span>📅 Né le {patient.birthDate}</span>
+                                {patient.age && <span>⭐ {patient.age} ans</span>}
+                                {patient.birthDate && <span>📅 Né le {patient.birthDate}</span>}
                                 {patient.phone && <span>📞 {patient.phone}</span>}
                                 {patient.gender && <span>⚥ {patient.gender}</span>}
+                                {patient.dmiId && <span>🔑 DMI: {patient.dmiId}</span>}
                             </div>
-                            <div className="mt-2 text-sm text-gray-400">
-                                Dernière session: {patient.lastSession}
-                            </div>
+                            {patient.lastSession && (
+                                <div className="mt-2 text-sm text-gray-400">
+                                    Dernière session: {patient.lastSession}
+                                </div>
+                            )}
+                            
                         </div>
                     </div>
                 </div>
 
+                {/* Action Buttons */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <button
                         onClick={handleStartTests}
@@ -139,29 +217,28 @@ export default function PatientPage({ params }: PatientPageProps) {
                                 Consultez les résultats et l'évolution
                             </p>
                             <div className="mt-4 text-xs bg-white/20 px-4 py-1.5 rounded-full">
-                                Dernier: {patient.lastSession}
+                                {patient.lastSession ? `Dernier: ${patient.lastSession}` : 'Aucune session'}
                             </div>
                         </div>
                     </button>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 text-center">
-                        <div className="text-2xl font-bold text-blue-600">4</div>
-                        <div className="text-xs text-gray-500">Tests disponibles</div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 text-center">
-                        <div className="text-2xl font-bold text-green-600">2</div>
-                        <div className="text-xs text-gray-500">Tests complétés</div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 text-center">
-                        <div className="text-2xl font-bold text-amber-500">78%</div>
-                        <div className="text-xs text-gray-500">Score global</div>
-                    </div>
-                    <div className="bg-white p-4 rounded-xl border border-gray-200 text-center">
-                        <div className="text-2xl font-bold text-purple-600">⚠️ MCI</div>
-                        <div className="text-xs text-gray-500">Diagnostic</div>
-                    </div>
+                
+
+                {/* Quick Actions */}
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                    <Link
+                        href={`/patient/${patient.id}/edit`}
+                        className="text-center px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition text-gray-700 text-sm font-medium"
+                    >
+                        ✏️ Modifier les informations
+                    </Link>
+                    <Link
+                        href={`/patient/${patient.id}/history`}
+                        className="text-center px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition text-gray-700 text-sm font-medium"
+                    >
+                        📋 Historique des tests
+                    </Link>
                 </div>
 
                 <EthicsBanner />

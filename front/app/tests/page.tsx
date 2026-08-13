@@ -9,36 +9,53 @@ import Navbar from '@/components/Navbar'
 import PatientSelector from '@/components/PatientSelector'
 import PatientForm from '@/components/PatientForm'
 import EthicsBanner from '@/components/EthicsBanner'
-import { mockPatients, mockTests } from '@/lib/data'
+import { mockTests } from '@/lib/data'
+import { patientsApi } from '@/lib/api'
+import { getToken } from '@/lib/auth'
 import type { User, Patient, Test, PatientFormData } from '@/types'
 
 export default function TestsPage() {
     const router = useRouter()
     const [user, setUser] = useState<User | null>(null)
-    const [patients, setPatients] = useState<Patient[]>(mockPatients)
+    const [patients, setPatients] = useState<Patient[]>([])
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
 
     // Vérifier l'authentification et charger les données
     useEffect(() => {
-        const userData = localStorage.getItem('user')
-        if (!userData) {
+        const token = getToken()
+        if (!token) {
             router.push('/')
             return
         }
-        setUser(JSON.parse(userData))
 
-        // Vérifier si un patient était sélectionné
-        const savedPatientId = localStorage.getItem('selectedPatient')
-        if (savedPatientId) {
-            const patient = patients.find(p => p.id === savedPatientId)
-            if (patient) {
-                setSelectedPatient(patient)
+        const userData = localStorage.getItem('user')
+        if (userData) {
+            setUser(JSON.parse(userData))
+        }
+
+        loadPatients()
+    }, [router])
+
+    const loadPatients = async () => {
+        setIsLoading(true)
+        const result = await patientsApi.getAll()
+        if (result.success && result.data) {
+            setPatients(result.data)
+            // Vérifier si un patient était sélectionné
+            const savedPatientId = localStorage.getItem('selectedPatient')
+            if (savedPatientId) {
+                const patient = result.data.find(p => p.id === savedPatientId)
+                if (patient) {
+                    setSelectedPatient(patient)
+                }
             }
+        } else {
+            console.error('Erreur chargement patients:', result.error)
         }
         setIsLoading(false)
-    }, [router, patients])
+    }
 
     // Sauvegarder le patient sélectionné quand il change
     useEffect(() => {
@@ -54,31 +71,30 @@ export default function TestsPage() {
         }
     }
 
-    const handleAddPatient = (formData: PatientFormData) => {
-        const newPatient: Patient = {
-            id: `PAT_${String(patients.length + 1).padStart(6, '0')}`,
-            name: `${formData.firstName} ${formData.lastName}`,
-            initials: `${formData.firstName[0]}${formData.lastName[0]}`,
-            age: new Date().getFullYear() - new Date(formData.birthDate).getFullYear(),
-            birthDate: formData.birthDate,
-            dmiId: formData.dmiId,
-            gender: formData.gender,
-            lastSession: new Date().toLocaleDateString('fr-FR'),
-            color: ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][Math.floor(Math.random() * 6)]
+    const handleAddPatient = async (formData: PatientFormData) => {
+        const newPatient = {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            date_of_birth: formData.birthDate,
+            external_ref: formData.dmiId,
         }
 
-        setPatients([newPatient, ...patients])
-        setSelectedPatient(newPatient)
-        localStorage.setItem('selectedPatient', newPatient.id)
-        alert(`✅ Patient ${newPatient.name} ajouté avec succès !`)
-        setIsFormOpen(false)
+        const result = await patientsApi.create(newPatient)
+        
+        if (result.success && result.data) {
+            setPatients([result.data, ...patients])
+            setSelectedPatient(result.data)
+            localStorage.setItem('selectedPatient', result.data.id)
+            alert(`✅ Patient ${result.data.name} ajouté avec succès !`)
+            setIsFormOpen(false)
+        } else {
+            alert(`❌ Erreur: ${result.error || 'Impossible d\'ajouter le patient'}`)
+        }
     }
 
     const handleStartTest = (testId: string) => {
         if (!selectedPatient) return
-        // Sauvegarder le test en cours
         localStorage.setItem('currentTest', testId)
-        // Rediriger vers la page d'enregistrement
         router.push(`/recording?test=${testId}&patient=${selectedPatient.id}`)
     }
 
@@ -90,7 +106,6 @@ export default function TestsPage() {
         }
     }
 
-    // ✅ Finaliser les tests - Retourne au dashboard
     const handleFinishTests = () => {
         setSelectedPatient(null)
         localStorage.removeItem('selectedPatient')
@@ -139,7 +154,6 @@ export default function TestsPage() {
                 ) : (
                     // Mode : Tests du patient sélectionné
                     <>
-                        {/* En-tête avec patient et bouton retour */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                             <div>
                                 <div className="flex items-center gap-3">
@@ -159,7 +173,6 @@ export default function TestsPage() {
                                 >
                                     ← Retour au patient
                                 </button>
-                                {/* ✅ Bouton "Finaliser les tests" en rouge */}
                                 <button
                                     onClick={handleFinishTests}
                                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
@@ -175,7 +188,7 @@ export default function TestsPage() {
                             </div>
                         </div>
 
-                        {/* Liste des tests - TOUS disponibles, PAS de complétion */}
+                        {/* Liste des tests */}
                         <div className="space-y-4">
                             {mockTests.map((test) => (
                                 <div
@@ -183,12 +196,9 @@ export default function TestsPage() {
                                     className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition"
                                 >
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                                        {/* Icône */}
                                         <div className="text-4xl sm:text-5xl flex-shrink-0 text-center sm:text-left">
                                             {test.icon}
                                         </div>
-
-                                        {/* Info Test */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                                                 <h3 className="text-lg font-semibold text-gray-900">{test.name}</h3>
@@ -196,8 +206,6 @@ export default function TestsPage() {
                                             </div>
                                             <p className="text-sm text-gray-500 mt-1">{test.description}</p>
                                         </div>
-
-                                        {/* Bouton Démarrer - TOUJOURS disponible */}
                                         <button
                                             onClick={() => handleStartTest(test.id)}
                                             className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition whitespace-nowrap"
@@ -209,7 +217,6 @@ export default function TestsPage() {
                             ))}
                         </div>
 
-                        {/* Bouton protocole complet - lance le premier test */}
                         <button
                             className="w-full mt-6 py-3.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition"
                             onClick={() => {
@@ -222,7 +229,6 @@ export default function TestsPage() {
                             ▶️ Lancer le protocole complet
                         </button>
 
-                        {/* Lien vers le rapport */}
                         <div className="mt-4 text-center">
                             <Link
                                 href={`/rapport/${selectedPatient.id}`}
@@ -239,7 +245,6 @@ export default function TestsPage() {
                 </div>
             </main>
 
-            {/* Modal Formulaire */}
             <PatientForm
                 isOpen={isFormOpen}
                 onClose={() => setIsFormOpen(false)}

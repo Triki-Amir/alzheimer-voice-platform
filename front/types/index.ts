@@ -1,3 +1,5 @@
+// types/index.ts
+
 export interface User {
     id: string         
     email: string
@@ -16,7 +18,6 @@ export interface DoctorVoiceReference {
     path: string
     createdAt: string
 }
-// types/index.ts - Ajouter
 
 export interface TestDetail {
     testId: TestType
@@ -27,11 +28,10 @@ export interface TestDetail {
     quality: 'excellent' | 'good' | 'poor'
     diagnosis?: 'control' | 'mci' | 'ad'
     confidence?: number
-    // Détails spécifiques
     transcript?: string
     words?: string[]
     wordCount?: number
-    speechRate?: number // mots par minute
+    speechRate?: number
     fillerWords?: number
     repetitions?: number
     accuracy?: number
@@ -51,6 +51,7 @@ export interface TestDetailPageProps {
     patientId: string
     testId: TestType
 }
+
 export interface ReportSummary {
     patientId: string
     patientName: string
@@ -62,16 +63,19 @@ export interface ReportSummary {
     testsCompleted: number
     totalTests: number
 }
-// types/index.ts
 
 export interface PatientFormData {
     firstName: string
     lastName: string
     birthDate: string
-    dmiId: string         
+    dmiId: string
     gender: 'Homme' | 'Femme'
-    phone: string
+    phone?: string
+    phoneCountry?: string
+    address?: string
 }
+
+// types/index.ts
 
 export interface Patient {
     id: string
@@ -80,13 +84,14 @@ export interface Patient {
     age: number
     phone?: string
     birthDate: string
-    dmiId: string 
+    dmiId: string      
     gender?: 'Homme' | 'Femme'
     address?: string
     lastSession: string
     color: string
     createdAt?: string
 }
+
 export type TestType = 
     | 'cookie_theft' 
     | 'fluency' 
@@ -111,7 +116,6 @@ export interface Test {
     maxWords?: number
 }
 
-// ===================== RAPPORT PATIENT =====================
 export interface TestResult {
     testId: TestType
     testName: string
@@ -127,7 +131,7 @@ export interface Recording {
     id: string
     patientId: string
     testType: TestType
-    duration: number // en secondes
+    duration: number
     quality: 'excellent' | 'good' | 'poor'
     noiseLevel: 'low' | 'medium' | 'high'
     timestamp: Date
@@ -139,7 +143,7 @@ export type Diagnosis = 'control' | 'mci' | 'ad'
 export interface Result {
     patientId: string
     diagnosis: Diagnosis
-    confidence: number // 0-1
+    confidence: number
     features: {
         lexicalRichness: number
         syntacticComplexity: number
@@ -148,6 +152,7 @@ export interface Result {
         pauseFrequency: number
     }
 }
+
 export interface ApiResponse<T> {
     success: boolean
     data: T
@@ -160,29 +165,11 @@ export interface PatientReport {
     lastSession: string
     totalTests: number
     completedTests: number
-    overallScore?: number // 0-100
+    overallScore?: number
     diagnosis?: 'control' | 'mci' | 'ad'
     confidence?: number
     tests: TestResult[]
 }
-
-export interface TestResult {
-    testId: TestType
-    testName: string
-    date: string
-    duration: number // secondes
-    score: number // 0-100
-    quality: 'excellent' | 'good' | 'poor'
-    diagnosis?: 'control' | 'mci' | 'ad'
-    confidence?: number
-    features?: {
-        lexicalRichness: number
-        syntacticComplexity: number
-        responseTime: number
-    }
-}
-
-// types/index.ts
 
 export type PracticeType = 'hospital' | 'clinic' | 'cabinet' | 'other'
 
