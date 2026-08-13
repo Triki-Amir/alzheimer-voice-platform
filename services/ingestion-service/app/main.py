@@ -9,7 +9,7 @@ from voiceplatform_shared.minio_client import get_minio_client
 from voiceplatform_shared.publisher import publish_session_message
 from voiceplatform_shared.constants import Queues
 from voiceplatform_shared.db_models import Patient
-
+from voiceplatform_shared.csrf import verify_csrf ,set_csrf_cookie
 from .auth_client import get_current_doctor
 from .database import get_db
 from . import storage
@@ -17,12 +17,13 @@ from . import storage
 app = FastAPI(title="Ingestion Service")
 
 
-@app.post("/sessions/upload", status_code=202)
+@app.post("/sessions/upload", status_code=202,)
 async def upload_session_audio(
     patient_id: uuid.UUID = Form(...),
     audio: UploadFile = File(...),
     doctor: dict = Depends(get_current_doctor),
     db: DBSession = Depends(get_db),
+    _: None = Depends(verify_csrf),
 ):
     # --- 2. Authorization: doctor must own this patient ---
     patient = (
