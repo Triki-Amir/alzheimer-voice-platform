@@ -42,7 +42,7 @@ class TwoFactorConfirm(BaseModel):
     code: str
 
 
-class TwoFactorConfirmResponse(Token):
+class TwoFactorConfirmResponse(BaseModel):
     backup_codes: list[str]
 
 
