@@ -34,7 +34,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "DELETE", "PUT", "PATCH"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -69,6 +69,7 @@ def get_current_superadmin(
             detail="Acces reserve au superadmin",
         )
     return doctor
+
 def get_pre_auth_doctor(token: str, db: Session) -> models.Doctor:
     payload = auth.decode_pre_auth_token(token)
     if not payload:
@@ -323,6 +324,89 @@ def list_my_patients(
 ):
     return db.query(models.Patient).filter(models.Patient.doctor_id == doctor.id).all()
 
+
+@app.get("/patients/{patient_id}", response_model=schemas.PatientOut)
+def get_patient(
+    patient_id: UUID,
+    doctor: models.Doctor = Depends(get_current_doctor),
+    db: Session = Depends(get_db),
+):
+    """Récupère un patient spécifique par son ID (vérifie que le patient appartient au docteur)."""
+    patient = db.query(models.Patient).filter(
+        models.Patient.id == patient_id,
+        models.Patient.doctor_id == doctor.id
+    ).first()
+    
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient non trouvé ou vous n'avez pas les droits d'accès"
+        )
+    
+    return patient
+
+
+# ✅ NEW: Update a patient
+@app.put("/patients/{patient_id}", response_model=schemas.PatientOut)
+def update_patient(
+    patient_id: UUID,
+    payload: schemas.PatientUpdate,
+    doctor: models.Doctor = Depends(get_current_doctor),
+    db: Session = Depends(get_db),
+):
+    """Met à jour un patient existant (vérifie que le patient appartient au docteur)."""
+    patient = db.query(models.Patient).filter(
+        models.Patient.id == patient_id,
+        models.Patient.doctor_id == doctor.id
+    ).first()
+    
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient non trouvé ou vous n'avez pas les droits d'accès"
+        )
+    
+    # Mise à jour des champs fournis
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(patient, key, value)
+    
+    db.commit()
+    db.refresh(patient)
+    
+    # Log action
+    log_action(db, actor_id=doctor.id, action="update_patient", target_type="patient", target_id=patient.id)
+    
+    return patient
+
+
+# ✅ NEW: Delete a patient (for doctors)
+@app.delete("/patients/{patient_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_patient(
+    patient_id: UUID,
+    doctor: models.Doctor = Depends(get_current_doctor),
+    db: Session = Depends(get_db),
+):
+    """Supprime un patient (vérifie que le patient appartient au docteur)."""
+    patient = db.query(models.Patient).filter(
+        models.Patient.id == patient_id,
+        models.Patient.doctor_id == doctor.id
+    ).first()
+    
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient non trouvé ou vous n'avez pas les droits d'accès"
+        )
+    
+    # Log action before deletion
+    log_action(db, actor_id=doctor.id, action="delete_patient", target_type="patient", target_id=patient.id)
+    
+    db.delete(patient)
+    db.commit()
+    
+    return None  # 204 No Content
+
 # =============================================================================
 # Enrôlement vocal du médecin (échantillon de référence pour l'extraction)
 # =============================================================================
@@ -370,7 +454,7 @@ def delete_doctor(doctor_id: UUID, admin: models.Doctor = Depends(get_current_su
     return {"message": "Medecin supprime"}
 
 @app.delete("/admin/patients/{patient_id}")
-def delete_patient(patient_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
+def delete_patient_admin(patient_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
     """Supprime un compte patient (superadmin uniquement)."""
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
@@ -388,7 +472,7 @@ def list_doctors(admin: models.Doctor = Depends(get_current_superadmin), db: Ses
     return db.query(models.Doctor).all()
 
 @app.get("/admin/patients", response_model=list[schemas.PatientOut])
-def list_patients(admin: models.Doctor = Depends(get_current_superadmin),db: Session = Depends(get_db)):
+def list_patients_admin(admin: models.Doctor = Depends(get_current_superadmin),db: Session = Depends(get_db)):
     """Liste tous les patients (superadmin uniquement)."""
     log_action(db, actor_id=admin.id, action="list_patients")
     return db.query(models.Patient).all()

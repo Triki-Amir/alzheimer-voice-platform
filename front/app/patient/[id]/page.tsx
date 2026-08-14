@@ -1,4 +1,3 @@
-// app/patient/[id]/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -27,14 +26,12 @@ export default function PatientPage({ params }: PatientPageProps) {
     useEffect(() => {
         const loadData = async () => {
             try {
-                // Check authentication
                 const token = getToken()
                 if (!token) {
                     router.push('/')
                     return
                 }
 
-                // Get user data
                 const userData = localStorage.getItem('user')
                 if (!userData) {
                     router.push('/')
@@ -42,7 +39,6 @@ export default function PatientPage({ params }: PatientPageProps) {
                 }
                 setUser(JSON.parse(userData))
 
-                // Get patient ID from params
                 const { id } = await params
 
                 if (!id) {
@@ -50,7 +46,6 @@ export default function PatientPage({ params }: PatientPageProps) {
                     return
                 }
 
-                // Fetch patient from API
                 await loadPatient(id)
             } catch (error) {
                 console.error('Error loading patient data:', error)
@@ -73,7 +68,6 @@ export default function PatientPage({ params }: PatientPageProps) {
                 setPatient(result.data)
             } else {
                 setError(result.error || 'Patient non trouvé')
-                // Redirect after a moment if patient not found
                 setTimeout(() => {
                     router.push('/dashboard')
                 }, 2000)
@@ -103,7 +97,6 @@ export default function PatientPage({ params }: PatientPageProps) {
         router.push('/dashboard')
     }
 
-    // Loading state
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -115,7 +108,6 @@ export default function PatientPage({ params }: PatientPageProps) {
         )
     }
 
-    // Error state
     if (error) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -134,7 +126,6 @@ export default function PatientPage({ params }: PatientPageProps) {
         )
     }
 
-    // No user or no patient
     if (!user || !patient) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -151,7 +142,6 @@ export default function PatientPage({ params }: PatientPageProps) {
             <Header user={user} />
             <Navbar active="patients" />
             <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Back button */}
                 <button
                     onClick={handleBack}
                     className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6 transition"
@@ -159,14 +149,13 @@ export default function PatientPage({ params }: PatientPageProps) {
                     ← Retour au dashboard
                 </button>
 
-                {/* Patient Info Card */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
                         <div
                             className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl flex-shrink-0"
                             style={{ backgroundColor: patient.color || '#3B82F6' }}
                         >
-                            {patient.initials || patient.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                            {patient.initials || patient.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'P'}
                         </div>
                         <div className="flex-1 text-center sm:text-left">
                             <h1 className="text-2xl font-bold text-gray-900">{patient.name}</h1>
@@ -183,12 +172,10 @@ export default function PatientPage({ params }: PatientPageProps) {
                                     Dernière session: {patient.lastSession}
                                 </div>
                             )}
-                            
                         </div>
                     </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <button
                         onClick={handleStartTests}
@@ -221,24 +208,6 @@ export default function PatientPage({ params }: PatientPageProps) {
                             </div>
                         </div>
                     </button>
-                </div>
-
-                
-
-                {/* Quick Actions */}
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                    <Link
-                        href={`/patient/${patient.id}/edit`}
-                        className="text-center px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition text-gray-700 text-sm font-medium"
-                    >
-                        ✏️ Modifier les informations
-                    </Link>
-                    <Link
-                        href={`/patient/${patient.id}/history`}
-                        className="text-center px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 transition text-gray-700 text-sm font-medium"
-                    >
-                        📋 Historique des tests
-                    </Link>
                 </div>
 
                 <EthicsBanner />

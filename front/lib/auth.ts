@@ -12,7 +12,7 @@
 //
 // Both 2b) and 2a)'s confirm step return the final access_token.
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = 'http://localhost:8000'
 
 const TOKEN_KEY = 'ehealth_auth_token'
 const USER_KEY = 'user'

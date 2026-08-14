@@ -40,6 +40,7 @@ export default function LoginPage() {
 
         try {
             const result = await loginStep1(email, password)
+            console.log('loginStep1 result:', result)
             setPreAuthToken(result.preAuthToken)
 
             if (result.requiresSetup) {

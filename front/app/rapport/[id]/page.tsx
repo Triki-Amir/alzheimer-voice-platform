@@ -27,6 +27,7 @@ interface TestResult {
     quality: 'excellent' | 'good' | 'poor'
     diagnosis?: 'control' | 'mci' | 'ad'
     confidence?: number
+    sessionId?: string
 }
 
 interface PatientReport {
@@ -111,14 +112,15 @@ export default function RapportPage({ params }: RapportPageProps) {
         // Simuler 3-5 tests complétés
         const completedCount = Math.floor(Math.random() * 5) + 3
         const completedTests = allTests.slice(0, completedCount).map((test, index) => ({
-            testId: test.id as any,
+            testId: test.id,
             testName: test.name,
             date: new Date(Date.now() - (index * 3 * 24 * 60 * 60 * 1000)).toLocaleDateString('fr-FR'),
             duration: Math.floor(Math.random() * 120) + 60,
             score: Math.floor(Math.random() * 40) + 60,
             quality: qualities[index % qualities.length],
             diagnosis: diagnoses[index % diagnoses.length],
-            confidence: Math.round((0.7 + Math.random() * 0.25) * 100) / 100
+            confidence: Math.round((0.7 + Math.random() * 0.25) * 100) / 100,
+            sessionId: `session-${Date.now()}-${index}`
         }))
 
         // Calculer le score global
@@ -151,6 +153,13 @@ export default function RapportPage({ params }: RapportPageProps) {
             diagnosis: mainDiagnosis,
             confidence: Math.round((0.7 + Math.random() * 0.25) * 100) / 100,
             tests: completedTests
+        }
+    }
+
+    // ✅ Navigate to test result detail page
+    const handleTestClick = (testId: string) => {
+        if (patient) {
+            router.push(`/test-result/${patient.id}/${testId}`)
         }
     }
 
@@ -298,6 +307,12 @@ export default function RapportPage({ params }: RapportPageProps) {
                             </p>
                         </div>
                         <div className="bg-gray-50 p-3 rounded-lg text-center">
+                            <p className="text-sm text-gray-500">Score global</p>
+                            <p className={`text-lg font-bold ${report?.overallScore ? getScoreColor(report.overallScore) : 'text-gray-400'}`}>
+                                {report?.overallScore ? `${report.overallScore}%` : '—'}
+                            </p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg text-center">
                             <p className="text-sm text-gray-500">Dernier test</p>
                             <p className="text-lg font-bold text-gray-700">
                                 {testResults.length > 0 ? testResults[testResults.length - 1]?.date : '—'}
@@ -315,8 +330,11 @@ export default function RapportPage({ params }: RapportPageProps) {
                             return (
                                 <div
                                     key={test.id}
-                                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl gap-2 ${
-                                        isCompleted ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
+                                    onClick={() => isCompleted && handleTestClick(test.id)}
+                                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl gap-2 transition cursor-pointer ${
+                                        isCompleted 
+                                            ? 'bg-green-50 border border-green-100 hover:bg-green-100 hover:shadow-md' 
+                                            : 'bg-gray-50 border border-gray-100 cursor-not-allowed opacity-60'
                                     }`}
                                 >
                                     <div className="flex items-center gap-3">
@@ -345,11 +363,18 @@ export default function RapportPage({ params }: RapportPageProps) {
                                             )}
                                         </div>
                                     </div>
-                                    {isCompleted && result && (
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diag.color}`}>
-                                            {diag.badge}
-                                        </span>
-                                    )}
+                                    <div className="flex items-center gap-3">
+                                        {isCompleted && result && (
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diag.color}`}>
+                                                {diag.badge}
+                                            </span>
+                                        )}
+                                        {isCompleted && (
+                                            <span className="text-xs text-blue-600 hover:text-blue-800">
+                                                Voir détails →
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             )
                         })}
@@ -382,6 +407,9 @@ export default function RapportPage({ params }: RapportPageProps) {
                                 <ul className="mt-2 text-gray-600 list-disc list-inside space-y-1">
                                     <li>{testResults.length}/{allTests.length} tests complétés</li>
                                     <li>Dernière évaluation: {report?.lastSession}</li>
+                                    {report?.overallScore && (
+                                        <li>Score global: {report.overallScore}%</li>
+                                    )}
                                 </ul>
                             </div>
                             <div className="p-4 bg-gray-50 rounded-xl">

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { VoiceMetrics, RecordingState, VoiceRecorderOptions } from './types'
+import type { VoiceMetrics, RecordingState, VoiceRecorderOptions } from '../../types/index.ts'
+import { ingestionApi } from '../../lib/ingestion_service_api'
 
 // Valeurs par défaut pour les métriques
 const defaultMetrics: VoiceMetrics = {
@@ -25,8 +26,12 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
         onRecordingStart,
         onRecordingStop,
         onSilenceDetected,
+        onUploadComplete,
+        onUploadError,
         silenceThreshold = 0.02,
-        silenceTimeout = 3
+        silenceTimeout = 3,
+        patientId,
+        testType = 'cognitive'
     } = options
 
     // État
@@ -39,6 +44,8 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
         audioBlob: null,
         audioUrl: null
     })
+    const [isUploading, setIsUploading] = useState(false)
+    const [uploadError, setUploadError] = useState<string | null>(null)
 
     // Refs pour les objets audio
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -63,8 +70,6 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
 
     // Calcul du SNR (Signal-to-Noise Ratio) - mesure de la clarté
     const calculateSNR = useCallback((dataArray: Uint8Array): number => {
-        // Ici on simule un calcul de SNR
-        // Dans la réalité, il faudrait isoler la bande de fréquence de la voix
         let sum = 0
         let sumSquares = 0
         const n = dataArray.length
@@ -172,6 +177,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
 
     // Démarrer l'enregistrement
     const startRecording = useCallback(async () => {
+        setUploadError(null)
         try {
             // Demander l'accès au microphone
             const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -323,9 +329,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
             isComplete: true
         }))
     }, [recordingState.isRecording])
-
-    // Réinitialiser
-    const resetRecording = useCallback(() => {
+     const resetRecording = useCallback(() => {
         // Nettoyer les ressources
         if (mediaRecorderRef.current && recordingState.isRecording) {
             mediaRecorderRef.current.stop()
@@ -356,8 +360,67 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
             audioUrl: null
         })
         setMetrics(defaultMetrics)
+        setUploadError(null)
         audioChunksRef.current = []
     }, [recordingState.isRecording])
+    // ✅ NOUVEAU: Uploader l'audio vers le service d'ingestion
+    const uploadRecording = useCallback(async () => {
+        const { audioBlob, audioUrl } = recordingState
+        
+        if (!audioBlob && !audioUrl) {
+            const errorMsg = 'Aucun audio à uploader'
+            setUploadError(errorMsg)
+            onUploadError?.(errorMsg)
+            return
+        }
+
+        if (!patientId) {
+            const errorMsg = 'Aucun patient sélectionné'
+            setUploadError(errorMsg)
+            onUploadError?.(errorMsg)
+            return
+        }
+
+        setIsUploading(true)
+        setUploadError(null)
+
+        try {
+            // Si on a un audioUrl mais pas de blob, récupérer le blob
+            let blob = audioBlob
+            if (!blob && audioUrl) {
+                const response = await fetch(audioUrl)
+                blob = await response.blob()
+            }
+
+            if (!blob) {
+                throw new Error('Impossible de récupérer l\'audio')
+            }
+
+            // Upload via l'API d'ingestion
+            const result = await ingestionApi.uploadAudio(patientId, blob, testType)
+
+            if (result.success && result.data) {
+                // Succès
+                if (onUploadComplete) {
+                    onUploadComplete(result.data.session_id)
+                }
+                // Réinitialiser après upload réussi
+                resetRecording()
+            } else {
+                throw new Error(result.error || 'Erreur lors de l\'upload')
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Erreur lors de l\'upload'
+            setUploadError(errorMessage)
+            if (onUploadError) {
+                onUploadError(errorMessage)
+            }
+        } finally {
+            setIsUploading(false)
+        }
+    }, [recordingState, patientId, testType, onUploadComplete, onUploadError, resetRecording])
+
+   
 
     // Nettoyage à la destruction du composant
     useEffect(() => {
@@ -387,9 +450,12 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
         togglePause,
         stopRecording,
         resetRecording,
+        uploadRecording, // ✅ NOUVEAU
         isRecording: recordingState.isRecording,
         isPaused: recordingState.isPaused,
         isComplete: recordingState.isComplete,
+        isUploading,
+        uploadError,
         duration: recordingState.duration,
         audioBlob: recordingState.audioBlob,
         audioUrl: recordingState.audioUrl

@@ -83,7 +83,7 @@ export default function PatientsPage() {
     // ✅ UPDATED: Navigate to patient detail page instead of tests
     const handleSelectPatient = (patientId: string) => {
         localStorage.setItem('selectedPatient', patientId)
-        router.push(`/patients/${patientId}`)
+        router.push(`/patient/${patientId}`)
     }
 
     if (isLoading) {

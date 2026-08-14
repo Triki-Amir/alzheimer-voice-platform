@@ -248,9 +248,7 @@ export default function RapportsPage() {
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${diagnosis.color}`}>
                                                 {diagnosis.label}
                                             </span>
-                                            <span className="text-xs text-gray-400">
-                                                Confiance: {Math.round(report.confidence * 100)}%
-                                            </span>
+                                            
                                         </div>
                                     </div>
                                 )

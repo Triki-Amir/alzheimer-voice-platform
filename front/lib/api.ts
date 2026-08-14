@@ -51,7 +51,6 @@ export const patientsApi = {
         }
     },
 
-    // ✅ NEW: Get a single patient by ID
     getById: async (patientId: string): Promise<ApiResponse<Patient>> => {
         const token = getToken()
         if (!token) return { success: false, error: 'Non authentifié' }
@@ -63,7 +62,6 @@ export const patientsApi = {
             const data = await response.json()
             
             if (response.ok) {
-                // Transformer la réponse du backend en format frontend
                 const frontendPatient: Patient = {
                     id: data.id,
                     name: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
@@ -75,7 +73,6 @@ export const patientsApi = {
                     gender: data.gender || '',
                     lastSession: data.last_session || new Date().toLocaleDateString('fr-FR'),
                     color: ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][Math.floor(Math.random() * 6)],
-                    // Additional fields for statistics
                     createdAt: data.created_at || new Date().toISOString()
                 }
                 return { success: true, data: frontendPatient }
@@ -112,7 +109,6 @@ export const patientsApi = {
             console.log('📥 Réponse:', response.status, data)
 
             if (response.ok) {
-                // Transformer la réponse en Patient frontend
                 const frontendPatient: Patient = {
                     id: data.id,
                     name: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
@@ -132,7 +128,6 @@ export const patientsApi = {
         }
     },
 
-    // ✅ NEW: Update a patient
     update: async (patientId: string, patientData: {
         first_name?: string
         last_name?: string
@@ -177,7 +172,6 @@ export const patientsApi = {
         }
     },
 
-    // ✅ NEW: Delete a patient
     delete: async (patientId: string): Promise<ApiResponse<void>> => {
         const token = getToken()
         if (!token) return { success: false, error: 'Non authentifié' }
@@ -244,10 +238,17 @@ export const reportsApi = {
 
 // ===================== UPLOAD API =====================
 export const uploadApi = {
+    /**
+     * Upload audio file for a patient
+     * @param audioBlob - The audio blob to upload
+     * @param patientId - The patient ID
+     * @param testType - Type of test (cognitive, memory, language, attention)
+     * @param onProgress - Optional progress callback
+     */
     audio: async (
         audioBlob: Blob,
         patientId: string,
-        testType: string,
+        testType: string = 'cognitive',
         onProgress?: (progress: number) => void
     ): Promise<ApiResponse<{ session_id: string; status: string }>> => {
         const token = getToken()
@@ -257,9 +258,8 @@ export const uploadApi = {
             const formData = new FormData()
             formData.append('audio', audioBlob, `${patientId}_${testType}_${Date.now()}.webm`)
             formData.append('patient_id', patientId)
-            formData.append('test_type', testType)
 
-            const response = await fetch(`${API_URL}/ingest/sessions`, {
+            const response = await fetch(`${API_URL}/sessions/upload`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -272,19 +272,47 @@ export const uploadApi = {
             if (response.ok) {
                 return { success: true, data }
             }
-            return { success: false, error: data.detail || 'Erreur' }
+            return { success: false, error: data.detail || 'Erreur lors de l\'upload' }
         } catch (error) {
             console.error('❌ Erreur upload:', error)
             return { success: false, error: 'Erreur réseau' }
         }
     },
 
+    /**
+     * Get session status
+     * @param sessionId - The session ID
+     */
     getStatus: async (sessionId: string): Promise<ApiResponse<any>> => {
         const token = getToken()
         if (!token) return { success: false, error: 'Non authentifié' }
 
         try {
-            const response = await fetch(`${API_URL}/ingest/sessions/${sessionId}/status`, {
+            const response = await fetch(`${API_URL}/sessions/${sessionId}/status`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            const data = await response.json()
+            
+            if (response.ok) {
+                return { success: true, data }
+            }
+            return { success: false, error: data.detail || 'Erreur' }
+        } catch (error) {
+            return { success: false, error: 'Erreur réseau' }
+        }
+    },
+
+    /**
+     * Get all sessions for a patient
+     * @param patientId - The patient ID
+     * @param limit - Maximum number of sessions to return
+     */
+    getPatientSessions: async (patientId: string, limit: number = 10): Promise<ApiResponse<any[]>> => {
+        const token = getToken()
+        if (!token) return { success: false, error: 'Non authentifié' }
+
+        try {
+            const response = await fetch(`${API_URL}/patients/${patientId}/sessions?limit=${limit}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             })
             const data = await response.json()
@@ -337,24 +365,8 @@ export const doctorsApi = {
 }
 
 // ===================== WEBSOCKET =====================
-async function fetchWsTicket(): Promise<string | null> {
-    const token = getToken()
-    if (!token) return null
-
-    try {
-        const response = await fetch(`${API_URL}/auth/ws-ticket`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-        if (!response.ok) return null
-        const data = await response.json()
-        return data.ticket
-    } catch {
-        return null
-    }
-}
-
 export const metricsWebSocket = {
-    connect: async (
+    connect: (
         patientId: string,
         onMetrics: (metrics: any) => void,
         onStatus: (status: any) => void,
@@ -363,7 +375,6 @@ export const metricsWebSocket = {
         const token = getToken()
         if (!token) {
             onError('Non authentifié')
-            return null
             return null
         }
 

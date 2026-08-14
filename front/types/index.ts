@@ -75,8 +75,6 @@ export interface PatientFormData {
     address?: string
 }
 
-// types/index.ts
-
 export interface Patient {
     id: string
     name: string
@@ -153,10 +151,12 @@ export interface Result {
     }
 }
 
+// ✅ FIXED: Single definition of ApiResponse
 export interface ApiResponse<T> {
     success: boolean
-    data: T
+    data?: T
     error?: string
+    message?: string
 }
 
 export interface PatientReport {
@@ -192,4 +192,78 @@ export interface Doctor extends DoctorRegistrationData {
     voiceReferenceUrl?: string
     isVerified: boolean
     createdAt: string
+}
+
+// ==================== INGESTION TYPES ====================
+
+export interface Session {
+    session_id: string
+    patient_id: string
+    status: 'pending' | 'processing' | 'completed' | 'failed'
+    created_at: string
+    updated_at?: string
+    metadata: {
+        uploaded_at?: string
+        status?: string
+        error?: string
+        failed_at?: string
+        [key: string]: any
+    }
+    has_audio: boolean
+    raw_audio_path?: string
+    wrapped_data_key?: string
+}
+
+export interface SessionStatus {
+    session_id: string
+    patient_id: string
+    status: 'pending' | 'processing' | 'completed' | 'failed'
+    created_at: string
+    metadata: any
+    has_audio: boolean
+}
+
+export interface UploadAudioResponse {
+    session_id: string
+    status: string
+}
+
+export interface VoiceRecorderOptions {
+    // Callbacks
+    onMetricsUpdate?: (metrics: VoiceMetrics) => void
+    onRecordingStart?: () => void
+    onRecordingStop?: (blob: Blob) => void
+    onSilenceDetected?: (duration: number) => void
+    onUploadComplete?: (sessionId: string) => void  
+    onUploadError?: (error: string) => void       
+    
+    // Configuration
+    silenceThreshold?: number
+    silenceTimeout?: number
+    patientId?: string                               
+    testType?: string                            
+}
+
+export interface VoiceMetrics {
+    volume: number
+    volumeStatus: 'good' | 'warning' | 'error'
+    volumeLevel: string
+    noise: number
+    noiseStatus: 'good' | 'warning' | 'error'
+    noiseLevel: string
+    clarity: number
+    clarityStatus: 'good' | 'warning' | 'error'
+    clarityLevel: string
+    isSilent: boolean
+    silenceDuration: number
+    silenceStatus: 'good' | 'warning' | 'error'
+}
+
+export interface RecordingState {
+    isRecording: boolean
+    isPaused: boolean
+    isComplete: boolean
+    duration: number
+    audioBlob: Blob | null
+    audioUrl: string | null
 }
