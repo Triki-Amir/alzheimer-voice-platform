@@ -111,3 +111,6 @@ class PatientOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class LoginSuccess(BaseModel):
+    message: str = "Authentification reussie"

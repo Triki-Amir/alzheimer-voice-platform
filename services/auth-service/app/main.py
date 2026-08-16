@@ -4,13 +4,13 @@ import json
 import os
 import uuid
 from uuid import UUID
-
+from fastapi import Cookie
+from fastapi import Depends, FastAPI, HTTPException, Response, status, Header
 import qrcode
-from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-
+import secrets as _secrets
 from datetime import datetime, timedelta, timezone
 from . import auth, models, schemas
 from .database import get_db
@@ -41,13 +41,41 @@ app.add_middleware(
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
+
+def get_token_from_request(
+    cookie_token: str | None = Cookie(None, alias="ehealth_auth_token"),
+    header_token: str | None = Depends(OAuth2PasswordBearer(tokenUrl="token", auto_error=False)),
+) -> str:
+    token = cookie_token or header_token
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Non authentifie")
+    return token
+
+def set_csrf_cookie(response: Response) -> str:
+    csrf_token = _secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,   # frontend JS must be able to read this one
+        secure=True,
+        samesite="lax",
+        max_age=auth.JWT_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    return csrf_token
+
+def verify_csrf(
+    csrf_cookie: str | None = Cookie(None, alias="csrf_token"),
+    x_csrf_token: str | None = Header(None, alias="X-CSRF-Token"),
+):
+    if not csrf_cookie or not x_csrf_token or csrf_cookie != x_csrf_token:
+        raise HTTPException(status_code=403, detail="CSRF token invalide")
 # =============================================================================
 # Dependencies
 # =============================================================================
 def get_current_doctor(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    token: str = Depends(get_token_from_request), db: Session = Depends(get_db)
 ) -> models.Doctor:
-    """Exige un token COMPLET (mot de passe + TOTP verifies)."""
     payload = auth.decode_token(token)
     if not payload or not auth.is_fully_authenticated(payload):
         raise HTTPException(
@@ -58,6 +86,7 @@ def get_current_doctor(
     if not doctor:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilisateur introuvable")
     return doctor
+
 
 def get_current_superadmin(
     doctor: models.Doctor = Depends(get_current_doctor),
@@ -237,34 +266,53 @@ def confirm_2fa(
         max_age=auth.JWT_EXPIRE_MINUTES * 60,
         path="/",
     )
-
+    set_csrf_cookie(response)
     return schemas.TwoFactorConfirmResponse(
         backup_codes=backup_codes,
     )
 # =============================================================================
 # Etape 2b : verification 2FA a chaque connexion suivante
 # =============================================================================
-@app.post("/login/verify-2fa", response_model=schemas.Token)
-def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
+@app.post("/login/verify-2fa", response_model=schemas.LoginSuccess)
+def verify_2fa(
+    payload: schemas.TwoFactorVerify,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     doctor = get_pre_auth_doctor(payload.pre_auth_token, db)
     if not doctor.totp_enabled:
         raise HTTPException(status_code=400, detail="2FA non configuree pour ce compte")
 
-    # Meme verrouillage que pour le mot de passe : sans ca, un attaquant qui
-    # a deja le mot de passe pourrait brute-forcer les 6 chiffres du TOTP.
     if doctor.locked_until and doctor.locked_until > datetime.now(timezone.utc):
         raise HTTPException(
             status_code=423,
             detail="Compte temporairement verrouille. Reessayez plus tard.",
         )
 
-    if auth.verify_totp_code(decrypt_secret(doctor.totp_secret, aad=str(doctor.id).encode("ascii")), payload.code):
+    def _issue_token() -> schemas.LoginSuccess:
+        access_token = auth.create_access_token(doctor)
+        response.set_cookie(
+            key="ehealth_auth_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=auth.JWT_EXPIRE_MINUTES * 60,
+            path="/",
+        )
+        set_csrf_cookie(response)
+        # JWT is only in the cookie — never in the JSON body
+        return schemas.LoginSuccess()
+
+    if auth.verify_totp_code(
+        decrypt_secret(doctor.totp_secret, aad=str(doctor.id).encode("ascii")),
+        payload.code,
+    ):
         doctor.failed_login_attempts = 0
         doctor.locked_until = None
         db.commit()
-        return schemas.Token(access_token=auth.create_access_token(doctor))
+        return _issue_token()
 
-    # Code TOTP invalide : tenter un backup code (perte du telephone)
     stored_codes = json.loads(doctor.backup_codes or "[]")
     remaining = auth.verify_and_consume_backup_code(stored_codes, payload.code)
     if remaining is not None:
@@ -272,7 +320,7 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
         doctor.failed_login_attempts = 0
         doctor.locked_until = None
         db.commit()
-        return schemas.Token(access_token=auth.create_access_token(doctor))
+        return _issue_token()
 
     doctor.failed_login_attempts += 1
     if doctor.failed_login_attempts >= 5:
@@ -282,19 +330,21 @@ def verify_2fa(payload: schemas.TwoFactorVerify, db: Session = Depends(get_db)):
 
     raise HTTPException(status_code=401, detail="Code TOTP / backup code invalide")
 
-
 # =============================================================================
 # Verification de token (utilisee par les autres services / nginx auth_request)
 # =============================================================================
 @app.get("/verify")
-def verify(token: str = Depends(oauth2_scheme)):
-    """Le token voyage dans l'en-tete Authorization: Bearer <token>, jamais
-    en query string (une query string finit dans les logs nginx, l'historique
-    du navigateur, etc.)."""
+def verify(token: str = Depends(get_token_from_request)):
     payload = auth.decode_token(token)
     if not payload or not auth.is_fully_authenticated(payload):
         raise HTTPException(status_code=401, detail="Token invalide ou 2FA non verifiee")
     return payload
+
+@app.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(key="ehealth_auth_token", path="/")
+    response.delete_cookie(key="csrf_token", path="/")
+    return {"message": "Deconnecte"}
 
 @app.get("/ws-ticket")
 def get_ws_ticket(doctor: models.Doctor = Depends(get_current_doctor)):
@@ -309,6 +359,7 @@ def create_patient(
     payload: schemas.PatientCreate,
     doctor: models.Doctor = Depends(get_current_doctor),
     db: Session = Depends(get_db),
+    _: None = Depends(verify_csrf),
 ):
     patient = models.Patient(**payload.model_dump(), doctor_id=doctor.id)
     db.add(patient)
@@ -443,7 +494,7 @@ async def enroll_doctor_voice(
 
 
 @app.delete("/admin/doctors/{doctor_id}")
-def delete_doctor(doctor_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db)):
+def delete_doctor(doctor_id: UUID, admin: models.Doctor = Depends(get_current_superadmin), db: Session = Depends(get_db),_: None = Depends(verify_csrf)):
     doctor = db.query(models.Doctor).filter(models.Doctor.id == doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Medecin introuvable")
