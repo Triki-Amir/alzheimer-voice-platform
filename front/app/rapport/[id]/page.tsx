@@ -72,11 +72,26 @@ export default function RapportPage({ params }: RapportPageProps) {
             // Charger le patient depuis l'API
             const result = await patientsApi.getAll()
             if (result.success && result.data) {
-                const foundPatient = result.data.find(p => p.id === id)
+                const foundPatient = result.data.find(p => String(p.id) === id)
                 if (foundPatient) {
-                    setPatient(foundPatient)
-                    // Générer un rapport simulé pour le patient
-                    const reportData = generateReportForPatient(foundPatient)
+                    const normalizedPatient: Patient = {
+                        ...foundPatient,
+                        id: String(foundPatient.id),
+                        name: foundPatient.name || '',
+                        initials: foundPatient.initials || '',
+                        age: Number(foundPatient.age) || 0,
+                        birthDate: foundPatient.birthDate || '',
+                        dmiId: foundPatient.dmiId || '',
+                        lastSession: foundPatient.lastSession || '',
+                        color: foundPatient.color || '#2563EB',
+                        createdAt: foundPatient.createdAt || new Date().toISOString(),
+                        gender: foundPatient.gender === 'Homme' || foundPatient.gender === 'Femme'
+                            ? foundPatient.gender
+                            : undefined,
+                    }
+
+                    setPatient(normalizedPatient)
+                    const reportData = generateReportForPatient(normalizedPatient)
                     setReport(reportData)
                 } else {
                     router.push('/dashboard')
