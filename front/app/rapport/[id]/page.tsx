@@ -9,7 +9,7 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { getToken } from '@/lib/auth'
-import type { User, Patient } from '@/types'
+import type { User, Patient } from '../../../types/index'
 
 interface RapportPageProps {
     params: Promise<{
@@ -306,12 +306,7 @@ export default function RapportPage({ params }: RapportPageProps) {
                                 {diagnosisInfo.label}
                             </p>
                         </div>
-                        <div className="bg-gray-50 p-3 rounded-lg text-center">
-                            <p className="text-sm text-gray-500">Score global</p>
-                            <p className={`text-lg font-bold ${report?.overallScore ? getScoreColor(report.overallScore) : 'text-gray-400'}`}>
-                                {report?.overallScore ? `${report.overallScore}%` : '—'}
-                            </p>
-                        </div>
+                        
                         <div className="bg-gray-50 p-3 rounded-lg text-center">
                             <p className="text-sm text-gray-500">Dernier test</p>
                             <p className="text-lg font-bold text-gray-700">
@@ -407,9 +402,7 @@ export default function RapportPage({ params }: RapportPageProps) {
                                 <ul className="mt-2 text-gray-600 list-disc list-inside space-y-1">
                                     <li>{testResults.length}/{allTests.length} tests complétés</li>
                                     <li>Dernière évaluation: {report?.lastSession}</li>
-                                    {report?.overallScore && (
-                                        <li>Score global: {report.overallScore}%</li>
-                                    )}
+                                    
                                 </ul>
                             </div>
                             <div className="p-4 bg-gray-50 rounded-xl">
