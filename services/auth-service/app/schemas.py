@@ -42,7 +42,7 @@ class TwoFactorConfirm(BaseModel):
     code: str
 
 
-class TwoFactorConfirmResponse(Token):
+class TwoFactorConfirmResponse(BaseModel):
     backup_codes: list[str]
 
 
@@ -88,6 +88,19 @@ class PatientCreate(BaseModel):
     external_ref: Optional[str] = None
 
 
+# ✅ ADDED: PatientUpdate schema for PUT requests
+class PatientUpdate(BaseModel):
+    """Schema for updating a patient - all fields are optional"""
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    external_ref: Optional[str] = None
+    phone: Optional[str] = None
+    gender: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+
+
 class PatientOut(BaseModel):
     id: UUID
     first_name: Optional[str] = None
@@ -98,3 +111,6 @@ class PatientOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class LoginSuccess(BaseModel):
+    message: str = "Authentification reussie"

@@ -7,67 +7,22 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
-import { mockPatients } from '@/lib/data'
-import type { User, ReportSummary } from '@/types'
+import { patientsApi } from '@/lib/api'
+import { getUser, verifySession } from '@/lib/auth'
+import type { User, Patient } from '@/types'
 
-// ==================== DONNÉES MOCKÉES ====================
-const mockReports: ReportSummary[] = [
-    {
-        patientId: 'PAT_000123',
-        patientName: 'Slim Selmi',
-        patientInitials: 'SS',
-        patientColor: '#2563EB',
-        date: '05/07/2026',
-        diagnosis: 'mci',
-        confidence: 0.82,
-        testsCompleted: 4,
-        totalTests: 8
-    },
-    {
-        patientId: 'PAT_000124',
-        patientName: 'Khalil Hedili',
-        patientInitials: 'KH',
-        patientColor: '#10B981',
-        date: '01/07/2026',
-        diagnosis: 'control',
-        confidence: 0.95,
-        testsCompleted: 3,
-        totalTests: 8
-    },
-    {
-        patientId: 'PAT_000125',
-        patientName: 'Amir Triki',
-        patientInitials: 'AT',
-        patientColor: '#F59E0B',
-        date: '28/06/2026',
-        diagnosis: 'ad',
-        confidence: 0.88,
-        testsCompleted: 1,
-        totalTests: 8
-    },
-    {
-        patientId: 'PAT_000126',
-        patientName: 'Nadia Ayari',
-        patientInitials: 'NA',
-        patientColor: '#8B5CF6',
-        date: '25/06/2026',
-        diagnosis: 'mci',
-        confidence: 0.76,
-        testsCompleted: 2,
-        totalTests: 8
-    },
-    {
-        patientId: 'PAT_000127',
-        patientName: 'Ahmed Aouadi',
-        patientInitials: 'AA',
-        patientColor: '#EF4444',
-        date: '20/06/2026',
-        diagnosis: 'control',
-        confidence: 0.91,
-        testsCompleted: 5,
-        totalTests: 8
-    }
-]
+// ==================== TYPES ====================
+interface ReportSummary {
+    patientId: string
+    patientName: string
+    patientInitials: string
+    patientColor: string
+    date: string
+    diagnosis: 'control' | 'mci' | 'ad'
+    confidence: number
+    testsCompleted: number
+    totalTests: number
+}
 
 const getDiagnosisLabel = (diagnosis: string) => {
     switch (diagnosis) {
@@ -81,18 +36,91 @@ const getDiagnosisLabel = (diagnosis: string) => {
 export default function RapportsPage() {
     const router = useRouter()
     const [user, setUser] = useState<User | null>(null)
-    const [reports, setReports] = useState<ReportSummary[]>(mockReports)
+    const [patients, setPatients] = useState<Patient[]>([])
+    const [reports, setReports] = useState<ReportSummary[]>([])
     const [searchTerm, setSearchTerm] = useState('')
-    const [filteredReports, setFilteredReports] = useState<ReportSummary[]>(mockReports)
+    const [filteredReports, setFilteredReports] = useState<ReportSummary[]>([])
+    const [isLoading, setIsLoading] = useState(true)
 
+    // ✅ Vérifier l'authentification via le cookie
     useEffect(() => {
-        const userData = localStorage.getItem('user')
-        if (!userData) {
-            router.push('/')
-        } else {
-            setUser(JSON.parse(userData))
+        const loadData = async () => {
+            try {
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
+                await loadPatients()
+            } catch (error) {
+                console.error('❌ Erreur:', error)
+                router.push('/')
+            }
         }
+
+        loadData()
     }, [router])
+
+    const loadPatients = async () => {
+        setIsLoading(true)
+        const result = await patientsApi.getAll()
+        if (result.success && result.data) {
+            const normalizedPatients: Patient[] = result.data.map((patient) => {
+                const normalizedGender: Patient['gender'] =
+                    patient.gender === 'Homme' || patient.gender === 'Femme'
+                        ? patient.gender
+                        : undefined
+
+                return {
+                    ...patient,
+                    id: String(patient.id ?? ''),
+                    gender: normalizedGender
+                }
+            })
+            setPatients(normalizedPatients)
+            // Transformer les patients en rapports (simulé)
+            const reportsData: ReportSummary[] = normalizedPatients.map((patient) => ({
+                patientId: String(patient.id ?? ''),
+                patientName: patient.name,
+                patientInitials: patient.initials,
+                patientColor: patient.color,
+                date: patient.lastSession || new Date().toLocaleDateString('fr-FR'),
+                diagnosis: getRandomDiagnosis(),
+                confidence: Math.round((0.7 + Math.random() * 0.25) * 100) / 100,
+                testsCompleted: Math.floor(Math.random() * 8),
+                totalTests: 8
+            }))
+            setReports(reportsData)
+            setFilteredReports(reportsData)
+        } else {
+            console.error('Erreur chargement patients:', result.error)
+        }
+        setIsLoading(false)
+    }
+
+    // Fonction pour générer un diagnostic aléatoire (simulation)
+    const getRandomDiagnosis = (): 'control' | 'mci' | 'ad' => {
+        const diagnoses: ('control' | 'mci' | 'ad')[] = ['control', 'control', 'mci', 'mci', 'ad']
+        return diagnoses[Math.floor(Math.random() * diagnoses.length)]
+    }
 
     useEffect(() => {
         const filtered = reports.filter(r =>
@@ -106,12 +134,23 @@ export default function RapportsPage() {
         router.push(`/rapport/${patientId}`)
     }
 
-    if (!user) {
+    if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                     <p className="mt-4 text-gray-500">Chargement...</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (!user) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-500">Redirection...</p>
                 </div>
             </div>
         )
@@ -123,7 +162,7 @@ export default function RapportsPage() {
             <Navbar active="reports" />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 
-                {/* ==================== EN-TÊTE ==================== */}
+                {/* En-tête */}
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-gray-900">📊 Rapports</h1>
                     <p className="text-gray-500 text-sm">
@@ -131,7 +170,7 @@ export default function RapportsPage() {
                     </p>
                 </div>
 
-                {/* ==================== BARRE DE RECHERCHE ==================== */}
+                {/* Barre de recherche */}
                 <div className="mb-6">
                     <div className="flex gap-3">
                         <input
@@ -150,7 +189,7 @@ export default function RapportsPage() {
                     </div>
                 </div>
 
-                {/* ==================== RAPPORTS RÉCENTS ==================== */}
+                {/* Rapports récents */}
                 <section>
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-semibold text-gray-900">
@@ -173,7 +212,7 @@ export default function RapportsPage() {
                             <p className="text-gray-500 text-sm mt-2">
                                 {searchTerm 
                                     ? 'Aucun patient ne correspond à votre recherche.'
-                                    : 'Aucun rapport disponible pour le moment.'
+                                    : 'Aucun rapport disponible pour le moment. Commencez par effectuer des tests.'
                                 }
                             </p>
                         </div>
@@ -242,9 +281,6 @@ export default function RapportsPage() {
                                         <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${diagnosis.color}`}>
                                                 {diagnosis.label}
-                                            </span>
-                                            <span className="text-xs text-gray-400">
-                                                Confiance: {Math.round(report.confidence * 100)}%
                                             </span>
                                         </div>
                                     </div>

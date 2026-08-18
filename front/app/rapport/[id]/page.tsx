@@ -7,13 +7,39 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
-import { mockPatients, mockPatientReports } from '@/lib/data'
-import type { User, Patient, PatientReport } from '@/types'
+import { patientsApi } from '@/lib/api'
+import { getUser, verifySession } from '@/lib/auth'
+import type { User, Patient } from '@/types'
 
 interface RapportPageProps {
     params: Promise<{
         id: string
     }>
+}
+
+// Types pour le rapport
+interface TestResult {
+    testId: string
+    testName: string
+    date: string
+    duration: number
+    score: number
+    quality: 'excellent' | 'good' | 'poor'
+    diagnosis?: 'control' | 'mci' | 'ad'
+    confidence?: number
+    sessionId?: string
+}
+
+interface PatientReport {
+    patientId: string
+    patientName: string
+    lastSession: string
+    totalTests: number
+    completedTests: number
+    overallScore?: number
+    diagnosis?: 'control' | 'mci' | 'ad'
+    confidence?: number
+    tests: TestResult[]
 }
 
 export default function RapportPage({ params }: RapportPageProps) {
@@ -25,31 +51,68 @@ export default function RapportPage({ params }: RapportPageProps) {
 
     useEffect(() => {
         const loadData = async () => {
-            const userData = localStorage.getItem('user')
-            if (!userData) {
+            try {
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
+
+                const { id } = await params
+
+                if (!id) {
+                    router.push('/dashboard')
+                    return
+                }
+
+                // Charger le patient depuis l'API
+                const result = await patientsApi.getById(id)
+                if (result.success && result.data) {
+                    const normalizedPatient: Patient = {
+                        ...result.data,
+                        id: String(result.data.id),
+                        name: result.data.name || '',
+                        initials: result.data.initials || '',
+                        age: Number(result.data.age) || 0,
+                        birthDate: result.data.birthDate || '',
+                        dmiId: result.data.dmiId || '',
+                        lastSession: result.data.lastSession || '',
+                        color: result.data.color || '#2563EB',
+                        createdAt: result.data.createdAt || new Date().toISOString(),
+                        gender: result.data.gender === 'Homme' || result.data.gender === 'Femme'
+                            ? result.data.gender
+                            : undefined,
+                    }
+
+                    setPatient(normalizedPatient)
+                    const reportData = generateReportForPatient(normalizedPatient)
+                    setReport(reportData)
+                } else {
+                    router.push('/dashboard')
+                    return
+                }
+            } catch (error) {
+                console.error('❌ Erreur:', error)
                 router.push('/')
-                return
-            }
-            setUser(JSON.parse(userData))
-
-            const { id } = await params
-
-            if (!id) {
-                router.push('/dashboard')
-                return
-            }
-
-            const foundPatient = mockPatients.find(p => p.id === id)
-            if (foundPatient) {
-                setPatient(foundPatient)
-            } else {
-                router.push('/dashboard')
-                return
-            }
-
-            const patientReport = mockPatientReports[id]
-            if (patientReport) {
-                setReport(patientReport)
             }
 
             setIsLoading(false)
@@ -57,6 +120,76 @@ export default function RapportPage({ params }: RapportPageProps) {
 
         loadData()
     }, [router, params])
+
+    const generateReportForPatient = (patient: Patient): PatientReport => {
+        // Simuler des résultats de tests
+        const allTests = [
+            { id: 'cookie_theft', name: 'Récit d\'image (Cookie Theft)', icon: '🖼️' },
+            { id: 'fluency', name: 'Fluence verbale (Animaux)', icon: '🐾' },
+            { id: 'recall', name: 'Rappel d\'informations', icon: '📝' },
+            { id: 'sentence', name: 'Construction de phrases', icon: '✏️' },
+            { id: 'naming', name: 'Nomination d\'objets', icon: '🔍' },
+            { id: 'repetition', name: 'Répétition de phrases', icon: '🔊' },
+            { id: 'comprehension', name: 'Compréhension', icon: '🧠' },
+            { id: 'spontaneous', name: 'Discours spontané', icon: '💬' }
+        ]
+
+        const diagnoses: ('control' | 'mci' | 'ad')[] = ['control', 'mci', 'ad']
+        const qualities: ('excellent' | 'good' | 'poor')[] = ['excellent', 'good', 'poor']
+        
+        // Simuler 3-5 tests complétés
+        const completedCount = Math.floor(Math.random() * 5) + 3
+        const completedTests = allTests.slice(0, completedCount).map((test, index) => ({
+            testId: test.id,
+            testName: test.name,
+            date: new Date(Date.now() - (index * 3 * 24 * 60 * 60 * 1000)).toLocaleDateString('fr-FR'),
+            duration: Math.floor(Math.random() * 120) + 60,
+            score: Math.floor(Math.random() * 40) + 60,
+            quality: qualities[index % qualities.length],
+            diagnosis: diagnoses[index % diagnoses.length],
+            confidence: Math.round((0.7 + Math.random() * 0.25) * 100) / 100,
+            sessionId: `session-${Date.now()}-${index}`
+        }))
+
+        // Calculer le score global
+        const overallScore = Math.round(completedTests.reduce((acc, t) => acc + t.score, 0) / completedTests.length)
+
+        // Déterminer le diagnostic principal
+        const diagnosisCounts = completedTests.reduce((acc, t) => {
+            if (t.diagnosis) {
+                acc[t.diagnosis] = (acc[t.diagnosis] || 0) + 1
+            }
+            return acc
+        }, {} as Record<string, number>)
+
+        let mainDiagnosis: 'control' | 'mci' | 'ad' | undefined
+        let maxCount = 0
+        for (const [diag, count] of Object.entries(diagnosisCounts)) {
+            if (count > maxCount) {
+                maxCount = count
+                mainDiagnosis = diag as 'control' | 'mci' | 'ad'
+            }
+        }
+
+        return {
+            patientId: patient.id,
+            patientName: patient.name,
+            lastSession: new Date().toLocaleDateString('fr-FR'),
+            totalTests: allTests.length,
+            completedTests: completedTests.length,
+            overallScore,
+            diagnosis: mainDiagnosis,
+            confidence: Math.round((0.7 + Math.random() * 0.25) * 100) / 100,
+            tests: completedTests
+        }
+    }
+
+    // ✅ Navigate to test result detail page
+    const handleTestClick = (testId: string) => {
+        if (patient) {
+            router.push(`/test-result/${patient.id}/${testId}`)
+        }
+    }
 
     const getDiagnosisLabel = (diagnosis?: string) => {
         switch (diagnosis) {
@@ -90,9 +223,6 @@ export default function RapportPage({ params }: RapportPageProps) {
         { id: 'spontaneous', name: 'Discours spontané', icon: '💬' }
     ]
 
-    const testResults = report?.tests || []
-    const completedTestIds = testResults.map(t => t.testId)
-
     if (isLoading || !user || !patient) {
         return (
             <div className="min-h-screen flex items-center justify-center">
@@ -105,6 +235,7 @@ export default function RapportPage({ params }: RapportPageProps) {
     }
 
     const diagnosisInfo = report?.diagnosis ? getDiagnosisLabel(report.diagnosis) : getDiagnosisLabel(undefined)
+    const testResults = report?.tests || []
 
     return (
         <>
@@ -112,7 +243,7 @@ export default function RapportPage({ params }: RapportPageProps) {
             <Navbar active="reports" />
             <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 
-                {/* ==================== EN-TÊTE ==================== */}
+                {/* En-tête */}
                 <div className="flex items-center justify-between mb-6">
                     <Link
                         href={`/patient/${patient.id}`}
@@ -133,7 +264,7 @@ export default function RapportPage({ params }: RapportPageProps) {
                     </div>
                 </div>
 
-                {/* ==================== IDENTITÉ DU PATIENT ==================== */}
+                {/* Identité du patient */}
                 <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-6">
                     <div className="flex items-center gap-4">
                         <div
@@ -154,9 +285,7 @@ export default function RapportPage({ params }: RapportPageProps) {
                     </div>
                 </div>
 
-                {/* ==================== SECTION SOAP ==================== */}
-
-                {/* S - Subjective (Ce que le patient et sa famille rapportent) */}
+                {/* S - Subjective */}
                 <div className="bg-white border-l-4 border-blue-500 rounded-2xl shadow-sm p-6 mb-6">
                     <div className="flex items-center gap-3 mb-4">
                         <span className="text-2xl">💬</span>
@@ -186,7 +315,7 @@ export default function RapportPage({ params }: RapportPageProps) {
                     </div>
                 </div>
 
-                {/* O - Objective (Données cliniques et tests) */}
+                {/* O - Objective */}
                 <div className="bg-white border-l-4 border-green-500 rounded-2xl shadow-sm p-6 mb-6">
                     <div className="flex items-center gap-3 mb-4">
                         <span className="text-2xl">📊</span>
@@ -194,13 +323,11 @@ export default function RapportPage({ params }: RapportPageProps) {
                         <span className="text-xs text-gray-400 font-medium">Données cliniques et tests</span>
                     </div>
 
-                    {/* Résumé des tests */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                         <div className="bg-gray-50 p-3 rounded-lg text-center">
                             <p className="text-sm text-gray-500">Tests réalisés</p>
                             <p className="text-lg font-bold text-blue-600">{testResults.length}</p>
                         </div>
-                        
                         <div className="bg-gray-50 p-3 rounded-lg text-center">
                             <p className="text-sm text-gray-500">Diagnostic</p>
                             <p className={`text-lg font-bold ${diagnosisInfo.color.split(' ')[0]}`}>
@@ -215,7 +342,6 @@ export default function RapportPage({ params }: RapportPageProps) {
                         </div>
                     </div>
 
-                    {/* Détails des tests */}
                     <div className="space-y-3">
                         <h4 className="font-medium text-gray-700 text-sm">Résultats par test</h4>
                         {allTests.map((test) => {
@@ -226,8 +352,11 @@ export default function RapportPage({ params }: RapportPageProps) {
                             return (
                                 <div
                                     key={test.id}
-                                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl gap-2 ${
-                                        isCompleted ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'
+                                    onClick={() => isCompleted && handleTestClick(test.id)}
+                                    className={`flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl gap-2 transition cursor-pointer ${
+                                        isCompleted 
+                                            ? 'bg-green-50 border border-green-100 hover:bg-green-100 hover:shadow-md' 
+                                            : 'bg-gray-50 border border-gray-100 cursor-not-allowed opacity-60'
                                     }`}
                                 >
                                     <div className="flex items-center gap-3">
@@ -256,18 +385,25 @@ export default function RapportPage({ params }: RapportPageProps) {
                                             )}
                                         </div>
                                     </div>
-                                    {isCompleted && result && (
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diag.color}`}>
-                                            {diag.badge}
-                                        </span>
-                                    )}
+                                    <div className="flex items-center gap-3">
+                                        {isCompleted && result && (
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${diag.color}`}>
+                                                {diag.badge}
+                                            </span>
+                                        )}
+                                        {isCompleted && (
+                                            <span className="text-xs text-blue-600 hover:text-blue-800">
+                                                Voir détails →
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             )
                         })}
                     </div>
                 </div>
 
-                {/* A - Assessment (Analyse et diagnostic) */}
+                {/* A - Assessment */}
                 <div className="bg-white border-l-4 border-amber-500 rounded-2xl shadow-sm p-6 mb-6">
                     <div className="flex items-center gap-3 mb-4">
                         <span className="text-2xl">🧠</span>
@@ -276,7 +412,6 @@ export default function RapportPage({ params }: RapportPageProps) {
                     </div>
 
                     <div className="space-y-4">
-                        {/* Diagnostic */}
                         <div className="flex items-center gap-3 p-4 rounded-xl border-2 border-amber-200 bg-amber-50">
                             <span className="text-3xl">{diagnosisInfo.badge}</span>
                             <div>
@@ -288,7 +423,6 @@ export default function RapportPage({ params }: RapportPageProps) {
                             </div>
                         </div>
 
-                        {/* Synthèse clinique */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <div className="p-4 bg-gray-50 rounded-xl">
                                 <span className="font-medium text-gray-700">Points clés</span>
@@ -301,7 +435,6 @@ export default function RapportPage({ params }: RapportPageProps) {
                                 <span className="font-medium text-gray-700">Facteurs de risque</span>
                                 <ul className="mt-2 text-gray-600 list-disc list-inside space-y-1">
                                     <li>Âge: {patient.age} ans</li>
-                                    <li>Antécédents familiaux?</li>
                                     <li>Évolution progressive</li>
                                 </ul>
                             </div>
@@ -309,7 +442,7 @@ export default function RapportPage({ params }: RapportPageProps) {
                     </div>
                 </div>
 
-                {/* P - Plan (Prochaines étapes) */}
+                {/* P - Plan */}
                 <div className="bg-white border-l-4 border-purple-500 rounded-2xl shadow-sm p-6 mb-6">
                     <div className="flex items-center gap-3 mb-4">
                         <span className="text-2xl">📋</span>

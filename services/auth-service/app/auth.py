@@ -131,3 +131,11 @@ def verify_and_consume_backup_code(hashed_codes: list[str], submitted_code: str)
             remaining.remove(hashed)
             return remaining
     return None
+
+def create_ws_ticket(user: models.Doctor) -> str:
+    """Jeton jetable, tres courte duree de vie, uniquement pour ouvrir
+    une connexion WebSocket. Ne donne acces a rien d'autre."""
+    return _create_token(
+        {"sub": str(user.id), "scope": "ws_ticket"},
+        timedelta(seconds=15),
+    )

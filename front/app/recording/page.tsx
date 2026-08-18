@@ -4,12 +4,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
-import { mockPatients } from '@/lib/data'
-import type { User, Patient } from '@/types'
-import { AudioCleaner } from '@/components/VoiceRecorder/AudioCleaner'
+import { patientsApi } from '@/lib/api'
+import { ingestionApi } from '@/lib/ingestion_service_api'
+import { getUser, verifySession , AuthUser } from '@/lib/auth'
+import type { Patient } from '@/types'
 
 type TestType = 
     | 'cookie_theft' 
@@ -128,10 +128,104 @@ interface VoiceMetrics {
     silenceDuration: number
 }
 
+// ===================== AUDIO CONVERSION UTILITIES =====================
+
+/**
+ * Convert WebM blob to WAV format with better error handling
+ */
+const convertToWav = async (webmBlob: Blob): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+        if (!webmBlob || webmBlob.size === 0) {
+            reject(new Error('Fichier audio vide'))
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = async (event) => {
+            try {
+                const arrayBuffer = event.target?.result as ArrayBuffer
+                if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+                    reject(new Error('Buffer audio vide'))
+                    return
+                }
+
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+                    sampleRate: 16000
+                })
+
+                let audioBuffer
+                try {
+                    audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+                } catch (decodeError) {
+                    console.error('❌ Erreur de décodage:', decodeError)
+                    reject(new Error('Format audio non supporté'))
+                    return
+                }
+
+                if (!audioBuffer) {
+                    reject(new Error('Impossible de décoder l\'audio'))
+                    return
+                }
+
+                const wavBlob = audioBufferToWav(audioBuffer)
+                await audioContext.close()
+                resolve(wavBlob)
+            } catch (error) {
+                reject(error)
+            }
+        }
+        reader.onerror = () => reject(new Error('Erreur de lecture du fichier'))
+        reader.readAsArrayBuffer(webmBlob)
+    })
+}
+
+/**
+ * Convert AudioBuffer to WAV Blob
+ */
+const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
+    const numberOfChannels = audioBuffer.numberOfChannels
+    const sampleRate = audioBuffer.sampleRate
+    const length = audioBuffer.length * numberOfChannels * 2
+    const buffer = new ArrayBuffer(44 + length)
+    const view = new DataView(buffer)
+
+    const writeString = (view: DataView, offset: number, string: string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i))
+        }
+    }
+
+    writeString(view, 0, 'RIFF')
+    view.setUint32(4, 36 + length, true)
+    writeString(view, 8, 'WAVE')
+    writeString(view, 12, 'fmt ')
+    view.setUint32(16, 16, true)
+    view.setUint16(20, 1, true)
+    view.setUint16(22, numberOfChannels, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, sampleRate * numberOfChannels * 2, true)
+    view.setUint16(32, numberOfChannels * 2, true)
+    view.setUint16(34, 16, true)
+    writeString(view, 36, 'data')
+    view.setUint32(40, length, true)
+
+    const channelData = audioBuffer.getChannelData(0)
+    let offset = 44
+    for (let i = 0; i < audioBuffer.length; i++) {
+        const sample = Math.max(-1, Math.min(1, channelData[i]))
+        view.setInt16(offset, sample * 0x7FFF, true)
+        offset += 2
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' })
+}
+
+// ===================== MAIN COMPONENT =====================
+
 export default function RecordingPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const [user, setUser] = useState<User | null>(null)
+    const [user, setUser] = useState<AuthUser | null>(null)
     const [patient, setPatient] = useState<Patient | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [isRecording, setIsRecording] = useState(false)
@@ -143,10 +237,9 @@ export default function RecordingPage() {
     const [isComplete, setIsComplete] = useState(false)
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
-    const [isProcessing, setIsProcessing] = useState(false)
-    const [processMessage, setProcessMessage] = useState<string | null>(null)
-    const [cleanedAudioUrl, setCleanedAudioUrl] = useState<string | null>(null)
-    const [cleanedMetrics, setCleanedMetrics] = useState<any>(null)
+    const [isUploading, setIsUploading] = useState(false)
+    const [uploadStatus, setUploadStatus] = useState<string | null>(null)
+    const [sessionId, setSessionId] = useState<string | null>(null)
 
     const [voiceMetrics, setVoiceMetrics] = useState<VoiceMetrics>({
         noise: { level: 'Faible', status: 'good', percentage: 12 },
@@ -168,33 +261,53 @@ export default function RecordingPage() {
     const testConfig = testConfigs[testType]
 
     useEffect(() => {
-        const userData = localStorage.getItem('user')
-        if (!userData) {
-            router.push('/')
-            return
-        }
-        setUser(JSON.parse(userData))
+        const loadData = async () => {
+            try {
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
 
-        const patientId = searchParams?.get('patient')
-        const testId = searchParams?.get('test') as TestType || 'cookie_theft'
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+                setUser(userData as AuthUser)
 
-        if (patientId) {
-            const foundPatient = mockPatients.find(p => p.id === patientId)
-            if (foundPatient) {
-                setPatient(foundPatient)
+                const patientId = searchParams?.get('patient')
+                const testId = searchParams?.get('test') as TestType || 'cookie_theft'
+
+                if (patientId) {
+                    await loadPatient(patientId)
+                }
+
+                if (testId && testConfigs[testId]) {
+                    setTestType(testId)
+                }
+
+                setIsLoading(false)
+            } catch (error) {
+                console.error('❌ Erreur de chargement:', error)
+                router.push('/')
+            }
+
+            return () => {
+                cleanupResources()
             }
         }
 
-        if (testId && testConfigs[testId]) {
-            setTestType(testId)
-        }
-
-        setIsLoading(false)
-
-        return () => {
-            cleanupResources()
-        }
+        loadData()
     }, [router, searchParams])
+
+    const loadPatient = async (patientId: string) => {
+        const result = await patientsApi.getById(patientId)
+        if (result.success && result.data) {
+            setPatient(result.data)
+        }
+    }
 
     useEffect(() => {
         if (isRecording && !isPaused) {
@@ -314,81 +427,49 @@ export default function RecordingPage() {
         animationFrameRef.current = requestAnimationFrame(analyzeAudio)
     }
 
-    const cleanAudioWithAPI = async (blob: Blob) => {
+    // ✅ Upload with WAV conversion (sans polling)
+    const uploadToIngestion = async (blob: Blob) => {
         if (!blob || !patient) return
 
-        setIsProcessing(true)
-        setProcessMessage('🎙️ Nettoyage audio...')
+        setIsUploading(true)
+        setUploadStatus('📤 Upload vers le service d\'ingestion...')
 
         try {
-            const formData = new FormData()
-            formData.append('audio', blob, `${patient.id}_${testType}.webm`)
-            formData.append('patientId', patient.id)
-            formData.append('testType', testType)
-
-            const response = await fetch('/api/denoise', {
-                method: 'POST',
-                body: formData
+            // ✅ Convertir en WAV
+            setUploadStatus('🔄 Conversion en WAV...')
+            const wavBlob = await convertToWav(blob)
+            
+            console.log('🎵 Conversion réussie:', {
+                originalSize: blob.size,
+                wavSize: wavBlob.size,
+                originalType: blob.type,
+                wavType: wavBlob.type
             })
 
-            const result = await response.json()
+            setUploadStatus('📤 Upload vers le service...')
 
-            if (result.success) {
-                const snr = result.metrics?.snr_db ?? '?'
-                const reduction = result.metrics?.noise_reduction ?? '?'
-                
-                setProcessMessage(`✅ Nettoyé ! SNR: ${typeof snr === 'number' ? snr.toFixed(1) : snr} dB`)
-                setCleanedMetrics(result.metrics)
+            // ✅ Upload WAV
+            const result = await ingestionApi.uploadAudio(
+                patient.id,
+                wavBlob,
+                testType
+            )
 
-                if (result.audioBase64) {
-                    const cleanedBlob = AudioCleaner.base64ToBlob(result.audioBase64)
-                    const url = URL.createObjectURL(cleanedBlob)
-                    setCleanedAudioUrl(url)
-                }
+            console.log('📥 Upload result:', result)
+
+            if (result.success && result.data) {
+                setSessionId(result.data.session_id)
+                // ✅ Polling désactivé - afficher simplement la session créée
+                setUploadStatus(`✅ Session créée avec succès ! (ID: ${result.data.session_id.slice(0, 12)}...)`)
             } else {
-                setProcessMessage(`❌ Erreur: ${result.error || 'Échec du nettoyage'}`)
+                setUploadStatus(`❌ Erreur: ${result.error || 'Échec de l\'upload'}`)
             }
-
         } catch (error) {
-            console.error('❌ Erreur nettoyage:', error)
-            setProcessMessage('❌ Erreur lors du nettoyage')
+            console.error('❌ Upload error:', error)
+            setUploadStatus(`❌ Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
         } finally {
-            setIsProcessing(false)
+            setIsUploading(false)
         }
-    }
-
-    const processAndSaveAudio = async (blob: Blob) => {
-        if (!blob || !patient) return
-        
-        const formData = new FormData()
-        const originalFilename = `${patient.id}_${testType}_${new Date().toISOString().replace(/[:.]/g, '-')}.webm`
-        formData.append('audio', blob, originalFilename)
-        formData.append('patientId', patient.id)
-        formData.append('testType', testType)
-
-        try {
-            await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            })
-        } catch (e) {
-            console.warn('⚠️ Sauvegarde originale:', e)
-        }
-
-        await cleanAudioWithAPI(blob)
-    }
-
-    const downloadAudio = (blob: Blob | null, suffix: string = '') => {
-        if (!blob) return
-        
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${patient?.id}_${testType}_${new Date().toISOString().slice(0,10)}${suffix}.wav`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
     }
 
     const startRecording = async () => {
@@ -397,7 +478,9 @@ export default function RecordingPage() {
                 audio: {
                     echoCancellation: false,
                     noiseSuppression: false,
-                    autoGainControl: false
+                    autoGainControl: false,
+                    sampleRate: 16000,
+                    channelCount: 1
                 }
             })
             streamRef.current = stream
@@ -412,9 +495,31 @@ export default function RecordingPage() {
             analyserRef.current = analyser
             source.connect(analyser)
 
+            // ✅ Forcer audio/webm
+            const mimeTypes = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/ogg;codecs=opus'
+            ]
+
+            let selectedMimeType = null
+            for (const type of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    selectedMimeType = type
+                    console.log('✅ Using MIME type:', type)
+                    break
+                }
+            }
+
+            if (!selectedMimeType) {
+                console.warn('⚠️ No supported MIME type found, using default')
+                selectedMimeType = 'audio/webm;codecs=opus'
+            }
+
             const mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus'
+                mimeType: selectedMimeType
             })
+            
             mediaRecorderRef.current = mediaRecorder
             audioChunksRef.current = []
 
@@ -425,12 +530,22 @@ export default function RecordingPage() {
             }
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+                const blob = new Blob(audioChunksRef.current, { 
+                    type: 'audio/webm'
+                })
+
+                console.log('📦 Blob created:', {
+                    size: blob.size,
+                    type: blob.type,
+                    chunks: audioChunksRef.current.length
+                })
+
                 const url = URL.createObjectURL(blob)
                 setAudioBlob(blob)
                 setAudioUrl(url)
                 setIsComplete(true)
-                processAndSaveAudio(blob)
+                
+                uploadToIngestion(blob)
             }
 
             mediaRecorder.start(1000)
@@ -441,10 +556,11 @@ export default function RecordingPage() {
             setIsComplete(false)
             setTime(0)
             setWords([])
-            setProcessMessage(null)
+            setUploadStatus(null)
+            setSessionId(null)
 
         } catch (error) {
-            console.error('Erreur microphone:', error)
+            console.error('❌ Erreur microphone:', error)
             alert('Impossible d\'accéder au microphone.')
         }
     }
@@ -490,9 +606,8 @@ export default function RecordingPage() {
         setWords([])
         setAudioBlob(null)
         setAudioUrl(null)
-        setCleanedAudioUrl(null)
-        setCleanedMetrics(null)
-        setProcessMessage(null)
+        setUploadStatus(null)
+        setSessionId(null)
         setVoiceMetrics({
             noise: { level: 'Faible', status: 'good', percentage: 12 },
             volume: { level: 'Bon', status: 'good', percentage: 78 },
@@ -501,6 +616,10 @@ export default function RecordingPage() {
             isSilent: false,
             silenceDuration: 0
         })
+    }
+
+    const handleNextTest = () => {
+        router.push('/tests')
     }
 
     const formatTime = (seconds: number) => {
@@ -514,10 +633,6 @@ export default function RecordingPage() {
             setWords([...words, currentWord.trim()])
             setCurrentWord('')
         }
-    }
-
-    const handleNextTest = () => {
-        router.push('/dashboard')  // ✅ Modifié : redirige vers dashboard
     }
 
     const getStatusColor = (status: 'good' | 'warning' | 'error') => {
@@ -535,24 +650,6 @@ export default function RecordingPage() {
             case 'warning': return 'bg-amber-100'
             case 'error': return 'bg-red-100'
             default: return 'bg-gray-100'
-        }
-    }
-
-    const getStatusIcon = (status: 'good' | 'warning' | 'error') => {
-        switch (status) {
-            case 'good': return '✅'
-            case 'warning': return '⚠️'
-            case 'error': return '❌'
-            default: return '⚪'
-        }
-    }
-
-    const getStatusLabel = (status: 'good' | 'warning' | 'error') => {
-        switch (status) {
-            case 'good': return 'Bon'
-            case 'warning': return 'Moyen'
-            case 'error': return 'Faible'
-            default: return '—'
         }
     }
 
@@ -578,7 +675,6 @@ export default function RecordingPage() {
 
     return (
         <>
-            <Header user={user} />
             <Navbar active="tests" />
             <main className="max-w-7xl mx-auto px-4 py-4">
                 
@@ -591,9 +687,6 @@ export default function RecordingPage() {
                         <span className="text-gray-300">|</span>
                         <span className="text-sm text-gray-500">
                             Patient: <span className="font-medium text-gray-700">{patient?.name}</span>
-                        </span>
-                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                            {patient?.id}
                         </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -609,7 +702,7 @@ export default function RecordingPage() {
                     </div>
                 </div>
 
-                {/* Métriques en haut */}
+                {/* Métriques en temps réel */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     <div className={`p-3 rounded-xl border-2 ${getStatusBg(voiceMetrics.volume.status)}`}>
                         <div className="flex justify-between items-center">
@@ -660,7 +753,7 @@ export default function RecordingPage() {
                     </div>
                 </div>
 
-                {/* Image PLEINE LARGEUR + Boutons en dessous */}
+                {/* Image */}
                 <div className="w-full bg-white border-4 border-gray-200 rounded-2xl p-2 shadow-xl mb-4">
                     {testConfig.imagePath ? (
                         <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100">
@@ -684,7 +777,24 @@ export default function RecordingPage() {
                     )}
                 </div>
 
-                {/* Boutons en dessous de l'image */}
+                {/* Upload Status */}
+                {uploadStatus && (
+                    <div className={`mb-4 p-3 rounded-xl text-center ${
+                        uploadStatus.includes('✅') ? 'bg-green-100 text-green-700 border-2 border-green-300' :
+                        uploadStatus.includes('❌') ? 'bg-red-100 text-red-700 border-2 border-red-300' :
+                        uploadStatus.includes('⏰') ? 'bg-amber-100 text-amber-700 border-2 border-amber-300' :
+                        'bg-blue-100 text-blue-700 border-2 border-blue-300'
+                    }`}>
+                        {uploadStatus}
+                        {sessionId && (
+                            <span className="block text-xs font-mono mt-1">
+                                Session: {sessionId}
+                            </span>
+                        )}
+                    </div>
+                )}
+
+                {/* Boutons */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     {/* Timer + Contrôles */}
                     <div className="md:col-span-1">
@@ -725,12 +835,12 @@ export default function RecordingPage() {
                     </div>
 
                     {/* Consignes + Navigation */}
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-3">
                         <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 h-full flex flex-col justify-between">
                             <div>
                                 <p className="text-xs font-medium text-blue-600">📋 Consignes</p>
-                                <p className="text-sm text-blue-800 mt-1 line-clamp-2">
-                                    {testConfig.instructions?.[0] || 'Suivez les instructions'}
+                                <p className="text-sm text-blue-800 mt-1">
+                                    {testConfig.instructions?.join(' • ') || 'Suivez les instructions'}
                                 </p>
                             </div>
                             <div className="flex gap-3 mt-3">
@@ -741,24 +851,6 @@ export default function RecordingPage() {
                                     Suivant →
                                 </button>
                             </div>
-                        </div>
-                    </div>
-
-                    {/* Télécharger + Qualité */}
-                    <div className="md:col-span-1">
-                        <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 h-full flex flex-col justify-between">
-                            <div>
-                                <p className="text-xs text-gray-500">Durée estimée</p>
-                                <p className="text-sm font-medium text-gray-700">{testConfig.duration}</p>
-                                {isComplete && processMessage && (
-                                    <p className={`text-xs mt-1 ${processMessage.includes('✅') ? 'text-green-600' : 'text-amber-600'}`}>
-                                        {processMessage}
-                                    </p>
-                                )}
-                            </div>
-                            <button className="w-full py-2 bg-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-300 transition mt-2">
-                                💾 Télécharger
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -799,17 +891,6 @@ export default function RecordingPage() {
                         {words.length === 0 && !isRecording && (
                             <p className="text-sm text-gray-400 text-center">Commencez l'enregistrement</p>
                         )}
-                    </div>
-                )}
-
-                {isComplete && (
-                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <button onClick={() => downloadAudio(audioBlob, '_original')} className="py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition" disabled={!audioBlob}>
-                            💾 Télécharger original
-                        </button>
-                        <button onClick={() => { if (cleanedAudioUrl) { fetch(cleanedAudioUrl).then(res => res.blob()).then(blob => downloadAudio(blob, '_cleaned')) } }} className="py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition" disabled={!cleanedAudioUrl}>
-                            💾 Télécharger nettoyé
-                        </button>
                     </div>
                 )}
 

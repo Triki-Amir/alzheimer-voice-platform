@@ -14,7 +14,7 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
         firstName: '',
         lastName: '',
         birthDate: '',
-        dmiId: '',          
+        dmiId: '',
         gender: 'Homme',
         phone: ''
     })
@@ -24,7 +24,6 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
         setFormData(prev => ({ ...prev, [name]: value }))
-        // Effacer l'erreur du champ
         if (errors[name as keyof PatientFormData]) {
             setErrors(prev => ({ ...prev, [name]: '' }))
         }
@@ -38,7 +37,6 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
         if (!formData.birthDate) newErrors.birthDate = 'La date de naissance est requise'
         if (!formData.dmiId.trim()) newErrors.dmiId = 'Le DMI_ID est requis'
         
-        // Validation du format DMI_ID (ex: DMI-2024-001234)
         if (formData.dmiId && !/^DMI-\d{4}-\d{6}$/.test(formData.dmiId)) {
             newErrors.dmiId = 'Format invalide. Exemple: DMI-2024-001234'
         }
@@ -49,7 +47,11 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
+        console.log('📝 Formulaire soumis !')  // ✅ Log pour debug
+        console.log('📝 Données:', formData)    // ✅ Log pour debug
+        
         if (validate()) {
+            console.log('✅ Validation OK, appel onSave')
             onSave(formData)
             // Reset form
             setFormData({
@@ -61,6 +63,8 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
                 phone: ''
             })
             onClose()
+        } else {
+            console.log('❌ Validation échouée:', errors)
         }
     }
 
@@ -182,18 +186,18 @@ export default function PatientForm({ isOpen, onClose, onSave }: PatientFormProp
                         )}
                     </div>
 
-                    {/* Ligne 4: Adresse */}
+                    {/* Ligne 4: Phone Number - ✅ Corrigé */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Phone number
+                            Téléphone
                         </label>
-                        <textarea
-                            name="phone number"
+                        <input
+                            type="tel"
+                            name="phone"  // ✅ Nom correct
                             value={formData.phone}
                             onChange={handleChange}
-                            rows={2}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition resize-none"
-                            placeholder="Numéro de téléphone"
+                            className="w-full h-12 px-4 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition"
+                            placeholder="+216 24 541 135"
                         />
                     </div>
 

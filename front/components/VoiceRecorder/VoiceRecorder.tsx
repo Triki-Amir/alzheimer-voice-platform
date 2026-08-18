@@ -9,12 +9,20 @@ interface VoiceRecorderProps extends VoiceRecorderOptions {
     className?: string
     showVisualizer?: boolean
     showMetrics?: boolean
+    patientId?: string
+    testType?: string
+    onUploadComplete?: (sessionId: string) => void
+    onUploadError?: (error: string) => void
 }
 
 export function VoiceRecorder({ 
     className = '',
     showVisualizer = true,
     showMetrics = true,
+    patientId,
+    testType = 'cognitive',
+    onUploadComplete,
+    onUploadError,
     onMetricsUpdate,
     onRecordingStart,
     onRecordingStop,
@@ -31,13 +39,18 @@ export function VoiceRecorder({
         togglePause,
         stopRecording,
         resetRecording,
+        uploadRecording,
         isRecording,
         isPaused,
         isComplete,
+        isUploading,
         duration,
         audioUrl
     } = useVoiceRecorder({
-        onMetricsUpdate,
+        patientId,
+        testType,
+        onUploadComplete,
+        onUploadError,
         onRecordingStart,
         onRecordingStop,
         onSilenceDetected,
@@ -95,10 +108,11 @@ export function VoiceRecorder({
                     {formatTime(duration)}
                 </div>
                 <div className="text-sm text-gray-500 mt-1">
-                    {isRecording && !isPaused && '🎙️ Enregistrement en cours'}
-                    {isPaused && '⏸️ En pause'}
-                    {!isRecording && !isComplete && 'Prêt à enregistrer'}
-                    {isComplete && '✅ Enregistrement terminé'}
+                    {isUploading && '📤 Upload en cours...'}
+                    {!isUploading && isRecording && !isPaused && '🎙️ Enregistrement en cours'}
+                    {!isUploading && isPaused && '⏸️ En pause'}
+                    {!isUploading && !isRecording && !isComplete && 'Prêt à enregistrer'}
+                    {!isUploading && isComplete && '✅ Enregistrement terminé'}
                 </div>
             </div>
 
@@ -106,7 +120,7 @@ export function VoiceRecorder({
             {showVisualizer && (
                 <div className="mb-4">
                     <VoiceVisualizer
-                        analyser={null} // TODO: Passer l'analyser depuis le hook
+                        analyser={null}
                         isRecording={isRecording}
                         isPaused={isPaused}
                     />
@@ -114,17 +128,18 @@ export function VoiceRecorder({
             )}
 
             {/* Boutons de contrôle */}
-            <div className="flex gap-3 mb-4">
-                {!isRecording && !isComplete && (
+            <div className="flex flex-wrap gap-3 mb-4">
+                {!isRecording && !isComplete && !isUploading && (
                     <button
                         onClick={startRecording}
                         className="flex-1 py-4 bg-red-600 text-white text-2xl font-bold rounded-2xl hover:bg-red-700 transition"
+                        disabled={!patientId}
                     >
                         🔴 Démarrer
                     </button>
                 )}
                 
-                {isRecording && (
+                {isRecording && !isUploading && (
                     <>
                         <button
                             onClick={togglePause}
@@ -141,7 +156,7 @@ export function VoiceRecorder({
                     </>
                 )}
                 
-                {isComplete && (
+                {isComplete && !isUploading && (
                     <>
                         <button
                             onClick={resetRecording}
@@ -150,14 +165,38 @@ export function VoiceRecorder({
                             🔄 Recommencer
                         </button>
                         {audioUrl && (
-                            <audio controls className="flex-1" src={audioUrl} />
+                            <>
+                                <audio controls className="flex-1 min-w-[200px]" src={audioUrl} />
+                                <button
+                                    onClick={uploadRecording}
+                                    className="flex-1 py-4 bg-blue-600 text-white text-2xl font-bold rounded-2xl hover:bg-blue-700 transition"
+                                    disabled={!patientId}
+                                >
+                                    📤 Upload
+                                </button>
+                            </>
                         )}
                     </>
                 )}
+
+                {isUploading && (
+                    <div className="flex-1 py-4 bg-blue-100 text-blue-800 text-2xl font-bold rounded-2xl text-center">
+                        ⏳ Upload en cours...
+                    </div>
+                )}
             </div>
 
+            {/* Patient info */}
+            {!patientId && !isUploading && (
+                <div className="mt-2 p-3 bg-yellow-50 border-2 border-yellow-300 rounded-xl text-center">
+                    <span className="text-yellow-700 font-bold">
+                        ⚠️ Aucun patient sélectionné
+                    </span>
+                </div>
+            )}
+
             {/* Métriques de qualité */}
-            {showMetrics && isRecording && (
+            {showMetrics && isRecording && !isUploading && (
                 <div className="grid grid-cols-2 gap-3">
                     <div className={`p-3 rounded-xl border-2 ${getStatusBg(metrics.volumeStatus)}`}>
                         <div className="flex justify-between items-center">
@@ -234,7 +273,7 @@ export function VoiceRecorder({
             )}
 
             {/* Alerte silence */}
-            {metrics.isSilent && metrics.silenceDuration > 2 && (
+            {metrics.isSilent && metrics.silenceDuration > 2 && !isUploading && (
                 <div className="mt-3 p-3 bg-red-100 border-2 border-red-300 rounded-xl text-center">
                     <span className="text-red-700 font-bold text-lg">
                         ⚠️ Silence détecté depuis {Math.floor(metrics.silenceDuration)} secondes
