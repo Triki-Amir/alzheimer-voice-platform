@@ -5,10 +5,9 @@ import os
 from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session as DBSession
-
+from .publisher import publish_session_message, publish_to_preprocessing
 from voiceplatform_shared.audio_upload_validation import validate_audio_upload, AudioValidationError
 from voiceplatform_shared.minio_client import get_minio_client
-from voiceplatform_shared.publisher import publish_session_message
 from voiceplatform_shared.constants import Queues
 from voiceplatform_shared.db_models import Patient
 from voiceplatform_shared.csrf import verify_csrf ,set_csrf_cookie
@@ -25,13 +24,15 @@ _allowed_origins = [
     for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,https://localhost:3000").split(",")
     if origin.strip()
 ]
+_allowed_origins.append("http://localhost:3000")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ===================== Health Check Endpoints =====================
@@ -59,7 +60,7 @@ async def upload_session_audio(
     audio: UploadFile = File(...),
     doctor: dict = Depends(get_current_doctor),
     db: DBSession = Depends(get_db),
-    _: None = Depends(verify_csrf),
+    #_: None = Depends(verify_csrf),
 ):
     """
     Upload audio for a patient session.

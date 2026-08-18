@@ -77,22 +77,64 @@ export default function LoginPage() {
     }
 
     // ==================== ETAPE 2b : verifier la 2FA (connexions suivantes) ====================
-    const handleVerify2FA = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setError('')
-        setIsLoading(true)
+    // ==================== ETAPE 2b : verifier la 2FA (connexions suivantes) ====================
+const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
 
-        try {
-            const accessToken = await verify2FA(preAuthToken, code)
-            saveSession(accessToken)
-            router.push('/dashboard')
-        } catch (err) {
-            setError(describeError(err))
-        } finally {
-            setIsLoading(false)
+    try {
+        console.log('🔍 === DÉBUT VÉRIFICATION 2FA ===');
+        console.log('📌 PreAuthToken:', preAuthToken ? preAuthToken.substring(0, 30) + '...' : '❌ MANQUANT');
+        console.log('📌 Code 2FA:', code);
+        
+        // ✅ Vérifier que le preAuthToken existe
+        if (!preAuthToken) {
+            console.error('❌ PreAuthToken manquant!');
+            throw new Error('Token de pré-authentification manquant. Veuillez vous reconnecter.');
         }
-    }
 
+        // ✅ Vérifier que le code fait 6 chiffres
+        if (!code || code.length !== 6) {
+            console.error('❌ Code invalide:', code);
+            throw new Error('Le code doit contenir exactement 6 chiffres.');
+        }
+
+        console.log('📤 Envoi de la requête à /login/verify-2fa...');
+        
+        const accessToken = await verify2FA(preAuthToken, code);
+        
+        console.log('📥 Réponse reçue:', accessToken ? '✅ Token reçu' : '❌ Pas de token');
+        console.log('🔑 Token:', accessToken ? accessToken.substring(0, 30) + '...' : '❌');
+
+        if (!accessToken) {
+            console.error('❌ Le serveur n\'a pas renvoyé de token d\'accès.');
+            throw new Error('Le serveur n\'a pas renvoyé de token d\'accès.');
+        }
+        
+        console.log('💾 Sauvegarde de la session...');
+        saveSession(accessToken);
+        console.log('✅ Session sauvegardée avec succès!');
+        
+        console.log('🚀 Redirection vers /dashboard...');
+        router.push('/dashboard');
+        
+    } catch (err) {
+        console.error('❌ === ERREUR DANS handleVerify2FA ===');
+        console.error('❌ Type d\'erreur:', typeof err);
+        console.error('❌ Détails de l\'erreur:', err);
+        
+        if (err instanceof Error) {
+            console.error('❌ Message:', err.message);
+            console.error('❌ Stack:', err.stack);
+        }
+        
+        setError(describeError(err));
+    } finally {
+        console.log('🔚 === FIN VÉRIFICATION 2FA ===');
+        setIsLoading(false);
+    }
+};
     const handleContinueAfterBackupCodes = () => {
         saveSession(pendingAccessToken)
         router.push('/dashboard')

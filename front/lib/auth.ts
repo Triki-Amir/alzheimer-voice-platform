@@ -15,6 +15,7 @@
 const API_URL = 'http://localhost:8000'
 
 const USER_KEY = 'user'
+const TOKEN_KEY = 'access_token'
 
 export type DoctorRole = 'clinician' | 'superadmin'
 
@@ -137,6 +138,7 @@ export async function enrollDoctorVoice(audioBlob: Blob, filename: string): Prom
 
         if (response.status === 401) {
             localStorage.removeItem(USER_KEY)
+            localStorage.removeItem(TOKEN_KEY)
             throw new AuthError('Session expirée, veuillez vous reconnecter', 401)
         }
 
@@ -217,8 +219,11 @@ export async function setup2FA(preAuthToken: string): Promise<TwoFactorSetup> {
     }
 }
 
+// ===================== Etape 2a : confirmer la 2FA (premiere fois) =====================
 export async function confirm2FA(preAuthToken: string, code: string): Promise<TwoFactorConfirmResult> {
     console.log('📍 URL 2FA confirm:', `${API_URL}/2fa/confirm`)
+    console.log('📌 preAuthToken:', preAuthToken?.substring(0, 30) + '...')
+    console.log('📌 code:', code)
     
     try {
         const response = await fetch(`${API_URL}/2fa/confirm`, {
@@ -229,15 +234,24 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
         })
 
         if (!response.ok) {
+            const errorText = await response.text()
+            console.error('❌ Erreur confirm 2FA:', response.status, errorText)
             throw new AuthError(await parseErrorDetail(response), response.status)
         }
 
         const data = await response.json()
         console.log('📝 2FA confirm response:', data)
 
+        // ✅ Extraire le token
+        const accessToken = data.access_token || data.token || data.accessToken
         
+        if (!accessToken) {
+            console.error('❌ Aucun token trouvé dans la réponse de confirm')
+            throw new AuthError('Token d\'accès non trouvé', 500)
+        }
+
         return {
-            accessToken: '',
+            accessToken: accessToken,
             backupCodes: data.backup_codes || [],
         }
     } catch (error) {
@@ -247,6 +261,7 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
     }
 }
 
+<<<<<<< HEAD
 // ===================== Etape 2b : verification 2FA =====================
 export async function verify2FA(preAuthToken: string, code: string): Promise<void> {
     const response = await fetch(`${API_URL}/login/verify-2fa`, {
@@ -257,9 +272,66 @@ export async function verify2FA(preAuthToken: string, code: string): Promise<voi
     })
     if (!response.ok) {
         throw new AuthError(await parseErrorDetail(response), response.status)
+=======
+// ===================== Etape 2b : verification 2FA (connexions suivantes) =====================
+export async function verify2FA(preAuthToken: string, code: string): Promise<string> {
+    console.log('🔍 === verify2FA ===')
+    console.log('📍 URL:', `${API_URL}/login/verify-2fa`)
+    console.log('📌 preAuthToken:', preAuthToken?.substring(0, 30) + '...')
+    console.log('📌 code:', code)
+    
+    try {
+        const response = await fetch(`${API_URL}/login/verify-2fa`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
+        })
+        
+        console.log('📝 2FA verify response status:', response.status)
+        
+        // ✅ Lire la réponse en texte brut pour debug
+        const responseText = await response.text()
+        console.log('📝 Response body:', responseText)
+        
+        // ✅ Parser la réponse
+        let data
+        try {
+            data = JSON.parse(responseText)
+        } catch (e) {
+            console.error('❌ Erreur de parsing JSON:', e)
+            throw new AuthError('Réponse invalide du serveur', response.status)
+        }
+
+        if (!response.ok) {
+            const detail = data.detail || data.message || 'Échec de la vérification 2FA'
+            console.error('❌ Erreur:', detail)
+            throw new AuthError(detail, response.status)
+        }
+
+        // ✅ Extraire le token (plusieurs formats possibles)
+        const accessToken = data.access_token || data.token || data.accessToken
+        
+        if (!accessToken) {
+            console.error('❌ Aucun token trouvé dans la réponse:', data)
+            console.error('❌ Clés disponibles:', Object.keys(data))
+            throw new AuthError('Token d\'accès non trouvé', 500)
+        }
+
+        console.log('✅ Token extrait avec succès!')
+        console.log('🔑 Token (premier 30 chars):', accessToken.substring(0, 30) + '...')
+        
+        // ✅ Retourner le token
+        return accessToken
+        
+    } catch (error) {
+        console.error('❌ Erreur verify2FA:', error)
+        if (error instanceof AuthError) throw error
+        throw new AuthError('Impossible de contacter le serveur', 0)
+>>>>>>> 0552d5bd3c2412f0f216ee213eaa7db32aa02280
     }
-    // Cookie is set by the backend — nothing to store
 }
+
 // ===================== Session helpers =====================
 
 function decodeJwtPayload(token: string): Record<string, any> | null {
@@ -273,19 +345,32 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
 }
 
 export function saveSession(accessToken: string): AuthUser | null {
-    if (accessToken) {
-        const payload = decodeJwtPayload(accessToken)
-        if (payload) {
-            const user: AuthUser = {
-                id: payload.sub,
-                email: payload.email,
-                role: payload.role,
-                name: payload.email?.split('@')[0] ?? 'Docteur',
-            }
-            localStorage.setItem(USER_KEY, JSON.stringify(user))
-            return user
-        }
+    console.log('💾 === saveSession ===')
+    console.log('🔑 Token (premier 30 chars):', accessToken?.substring(0, 30) + '...')
+    
+    if (!accessToken) {
+        console.error('❌ Aucun token à sauvegarder')
+        return null
     }
+    
+    // ✅ Sauvegarder le token dans localStorage
+    localStorage.setItem(TOKEN_KEY, accessToken)
+    
+    const payload = decodeJwtPayload(accessToken)
+    if (payload) {
+        console.log('📦 Payload décodé:', payload)
+        const user: AuthUser = {
+            id: payload.sub,
+            email: payload.email,
+            role: payload.role || 'clinician',
+            name: payload.name || (payload.email?.split('@')[0] ?? 'Docteur'),
+        }
+        localStorage.setItem(USER_KEY, JSON.stringify(user))
+        console.log('✅ Utilisateur sauvegardé:', user)
+        return user
+    }
+    
+    console.error('❌ Impossible de décoder le token')
     return getUser()
 }
 
@@ -299,10 +384,17 @@ export async function logout(): Promise<void> {
         // ignore network errors on logout
     }
     localStorage.removeItem(USER_KEY)
-    // Do NOT touch any token key – there shouldn't be one anymore
+    localStorage.removeItem(TOKEN_KEY)
 }
 
 export function getToken(): string | null {
+    // ✅ Récupérer le token depuis localStorage
+    const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('token')
+    if (token) {
+        console.log('🔑 Token trouvé:', token.substring(0, 30) + '...')
+        return token
+    }
+    console.warn('⚠️ Aucun token trouvé')
     return null
 }
 
@@ -313,16 +405,26 @@ export function getUser(): AuthUser | null {
 }
 
 export function isAuthenticated(): boolean {
-    return !!getUser()
+    return !!getUser() && !!getToken()
 }
 
 export async function verifySession(): Promise<boolean> {
+    const token = getToken()
+    if (!token) {
+        localStorage.removeItem(USER_KEY)
+        return false
+    }
+
     try {
         const response = await fetch(`${API_URL}/verify`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
             credentials: 'include',
         })
         if (!response.ok) {
             localStorage.removeItem(USER_KEY)
+            localStorage.removeItem(TOKEN_KEY)
             return false
         }
         return true

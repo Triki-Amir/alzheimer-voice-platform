@@ -132,27 +132,50 @@ interface VoiceMetrics {
 // ===================== AUDIO CONVERSION UTILITIES =====================
 
 /**
- * Convert WebM blob to WAV format
+ * Convert WebM blob to WAV format with better error handling
  */
 const convertToWav = async (webmBlob: Blob): Promise<Blob> => {
     return new Promise((resolve, reject) => {
+        if (!webmBlob || webmBlob.size === 0) {
+            reject(new Error('Fichier audio vide'))
+            return
+        }
+
         const reader = new FileReader()
         reader.onload = async (event) => {
             try {
                 const arrayBuffer = event.target?.result as ArrayBuffer
-                
-                // Decode audio data
-                const audioContext = new AudioContext({ sampleRate: 16000 })
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
-                
-                // Create WAV from audio buffer
+                if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+                    reject(new Error('Buffer audio vide'))
+                    return
+                }
+
+                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+                    sampleRate: 16000
+                })
+
+                let audioBuffer
+                try {
+                    audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+                } catch (decodeError) {
+                    console.error('❌ Erreur de décodage:', decodeError)
+                    reject(new Error('Format audio non supporté'))
+                    return
+                }
+
+                if (!audioBuffer) {
+                    reject(new Error('Impossible de décoder l\'audio'))
+                    return
+                }
+
                 const wavBlob = audioBufferToWav(audioBuffer)
+                await audioContext.close()
                 resolve(wavBlob)
             } catch (error) {
                 reject(error)
             }
         }
-        reader.onerror = reject
+        reader.onerror = () => reject(new Error('Erreur de lecture du fichier'))
         reader.readAsArrayBuffer(webmBlob)
     })
 }
@@ -167,25 +190,26 @@ const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
     const buffer = new ArrayBuffer(44 + length)
     const view = new DataView(buffer)
 
-    // Write WAV header
-    // "RIFF" chunk
+    const writeString = (view: DataView, offset: number, string: string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i))
+        }
+    }
+
     writeString(view, 0, 'RIFF')
     view.setUint32(4, 36 + length, true)
     writeString(view, 8, 'WAVE')
-    // "fmt " chunk
     writeString(view, 12, 'fmt ')
     view.setUint32(16, 16, true)
-    view.setUint16(20, 1, true) // PCM
+    view.setUint16(20, 1, true)
     view.setUint16(22, numberOfChannels, true)
     view.setUint32(24, sampleRate, true)
     view.setUint32(28, sampleRate * numberOfChannels * 2, true)
     view.setUint16(32, numberOfChannels * 2, true)
-    view.setUint16(34, 16, true) // bits per sample
-    // "data" chunk
+    view.setUint16(34, 16, true)
     writeString(view, 36, 'data')
     view.setUint32(40, length, true)
 
-    // Write audio data (only first channel for simplicity)
     const channelData = audioBuffer.getChannelData(0)
     let offset = 44
     for (let i = 0; i < audioBuffer.length; i++) {
@@ -195,15 +219,6 @@ const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
     }
 
     return new Blob([buffer], { type: 'audio/wav' })
-}
-
-/**
- * Write string to DataView
- */
-const writeString = (view: DataView, offset: number, string: string) => {
-    for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i))
-    }
 }
 
 // ===================== MAIN COMPONENT =====================
@@ -226,8 +241,6 @@ export default function RecordingPage() {
     const [isUploading, setIsUploading] = useState(false)
     const [uploadStatus, setUploadStatus] = useState<string | null>(null)
     const [sessionId, setSessionId] = useState<string | null>(null)
-    const [isConverting, setIsConverting] = useState(false)
-    const [conversionProgress, setConversionProgress] = useState<string | null>(null)
 
     const [voiceMetrics, setVoiceMetrics] = useState<VoiceMetrics>({
         noise: { level: 'Faible', status: 'good', percentage: 12 },
@@ -408,16 +421,16 @@ export default function RecordingPage() {
         animationFrameRef.current = requestAnimationFrame(analyzeAudio)
     }
 
-    // ✅ Updated upload function with WAV conversion
+    // ✅ Upload with WAV conversion
     const uploadToIngestion = async (blob: Blob) => {
         if (!blob || !patient) return
 
         setIsUploading(true)
-        setIsConverting(true)
-        setConversionProgress('🔄 Conversion en WAV...')
+        setUploadStatus('📤 Upload vers le service d\'ingestion...')
 
         try {
-            // ✅ Convert WebM to WAV
+            // ✅ Convertir en WAV
+            setUploadStatus('🔄 Conversion en WAV...')
             const wavBlob = await convertToWav(blob)
             
             console.log('🎵 Conversion réussie:', {
@@ -427,12 +440,12 @@ export default function RecordingPage() {
                 wavType: wavBlob.type
             })
 
-            setConversionProgress('📤 Upload vers le service...')
+            setUploadStatus('📤 Upload vers le service...')
 
-            // ✅ Upload WAV to ingestion service
+            // ✅ Upload WAV
             const result = await ingestionApi.uploadAudio(
                 patient.id,
-                wavBlob,  // ✅ WAV format
+                wavBlob,
                 testType
             )
 
@@ -442,7 +455,6 @@ export default function RecordingPage() {
                 setSessionId(result.data.session_id)
                 setUploadStatus(`✅ Session créée: ${result.data.session_id.slice(0, 12)}...`)
                 
-                // Poll for status
                 pollSessionStatus(result.data.session_id)
             } else {
                 setUploadStatus(`❌ Erreur: ${result.error || 'Échec de l\'upload'}`)
@@ -452,8 +464,6 @@ export default function RecordingPage() {
             setUploadStatus(`❌ Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`)
         } finally {
             setIsUploading(false)
-            setIsConverting(false)
-            setConversionProgress(null)
         }
     }
 
@@ -510,17 +520,14 @@ export default function RecordingPage() {
             analyserRef.current = analyser
             source.connect(analyser)
 
-            // ✅ Specify exact MIME type
+            // ✅ Forcer audio/webm
             const mimeTypes = [
                 'audio/webm;codecs=opus',
                 'audio/webm',
-                'audio/ogg;codecs=opus',
-                'audio/wav'
+                'audio/ogg;codecs=opus'
             ]
 
             let selectedMimeType = null
-
-            // ✅ Find a supported MIME type
             for (const type of mimeTypes) {
                 if (MediaRecorder.isTypeSupported(type)) {
                     selectedMimeType = type
@@ -548,23 +555,21 @@ export default function RecordingPage() {
             }
 
             mediaRecorder.onstop = () => {
-                // ✅ Create blob with correct MIME type
                 const blob = new Blob(audioChunksRef.current, { 
-                    type: selectedMimeType || 'audio/webm'
+                    type: 'audio/webm'
                 })
-            
+
                 console.log('📦 Blob created:', {
                     size: blob.size,
                     type: blob.type,
                     chunks: audioChunksRef.current.length
                 })
-            
+
                 const url = URL.createObjectURL(blob)
                 setAudioBlob(blob)
                 setAudioUrl(url)
                 setIsComplete(true)
-            
-                // ✅ Upload to ingestion service (will convert to WAV)
+                
                 uploadToIngestion(blob)
             }
 
@@ -798,20 +803,8 @@ export default function RecordingPage() {
                     )}
                 </div>
 
-                {/* Conversion Status */}
-                {isConverting && (
-                    <div className="mb-4 p-3 bg-blue-100 border-2 border-blue-300 rounded-xl text-center">
-                        <span className="text-blue-700 font-bold">
-                            ⏳ {conversionProgress || 'Conversion en cours...'}
-                        </span>
-                        <div className="mt-2 w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full animate-pulse w-full"></div>
-                        </div>
-                    </div>
-                )}
-
                 {/* Upload Status */}
-                {uploadStatus && !isConverting && (
+                {uploadStatus && (
                     <div className={`mb-4 p-3 rounded-xl text-center ${
                         uploadStatus.includes('✅') ? 'bg-green-100 text-green-700 border-2 border-green-300' :
                         uploadStatus.includes('❌') ? 'bg-red-100 text-red-700 border-2 border-red-300' :

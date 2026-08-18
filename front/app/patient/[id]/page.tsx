@@ -60,12 +60,21 @@ export default function PatientPage({ params }: PatientPageProps) {
     const loadPatient = async (patientId: string) => {
         setIsLoading(true)
         setError(null)
-        
+
         try {
-            const result = await patientsApi.getById(patientId)
-            
+            const result = await patientsApi.getAll()
+
             if (result.success && result.data) {
-                setPatient(result.data)
+                const foundPatient = result.data.find((patient) => String(patient.id) === patientId)
+
+                if (foundPatient) {
+                    setPatient(foundPatient as Patient)
+                } else {
+                    setError('Patient non trouvé')
+                    setTimeout(() => {
+                        router.push('/dashboard')
+                    }, 2000)
+                }
             } else {
                 setError(result.error || 'Patient non trouvé')
                 setTimeout(() => {

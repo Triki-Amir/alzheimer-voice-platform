@@ -7,8 +7,10 @@
 // JWT is carried by the HttpOnly cookie (credentials: 'include').
 // Never read the token from localStorage.
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:8000'
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8000'
+// ✅ Utiliser HTTP pour le développement
+const API_URL = 'http://localhost:8000'
+const WS_URL = 'ws://localhost:8000'
+import type { Patient } from '@/types'
 
 function getCsrfToken(): string {
     if (typeof document === 'undefined') return ''
@@ -23,9 +25,9 @@ export interface ApiResponse<T> {
     error?: string
     message?: string
 }
-
+/*
 export interface Patient {
-    id: string | number
+    id: string
     name: string
     initials: string
     age: number
@@ -37,16 +39,21 @@ export interface Patient {
     color: string
     createdAt?: string
 }
-
+*/
 export interface PatientReport {
-    id?: string | number
-    patient_id?: string | number
+    id?: string
+    patient_id?: string
     [key: string]: any
 }
 
 function getToken(): string {
     if (typeof document === 'undefined') return ''
-
+    
+    // ✅ Chercher d'abord dans localStorage
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+    if (token) return token
+    
+    // ✅ Sinon chercher dans les cookies
     const match = document.cookie.match(/(?:^|; )(?:token|access_token)=([^;]*)/)
     return match ? decodeURIComponent(match[1]) : ''
 }
@@ -55,8 +62,18 @@ function getToken(): string {
 export const patientsApi = {
     getAll: async (): Promise<ApiResponse<Patient[]>> => {
         try {
-            const response = await fetch(`${API_URL}/auth/patients`, {
+            const token = getToken()
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+
+            const response = await fetch(`${API_URL}/patients`, {
+                method: 'GET',
                 credentials: 'include',
+                headers,
             })
 
             if (response.status === 401) {
@@ -90,6 +107,51 @@ export const patientsApi = {
         }
     },
 
+    getById: async (patientId: string): Promise<ApiResponse<Patient>> => {
+        try {
+            const token = getToken()
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+
+            const response = await fetch(`${API_URL}/patients/${patientId}`, {
+                method: 'GET',
+                credentials: 'include',
+                headers,
+            })
+
+            if (response.status === 401) {
+                return { success: false, error: 'Non authentifié' }
+            }
+
+            const data = await response.json()
+
+            if (response.ok) {
+                const patient: Patient = {
+                    id: String(data.id),
+                    name: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
+                    initials: `${(data.first_name || '')[0] || ''}${(data.last_name || '')[0] || ''}`,
+                    age: data.date_of_birth ? new Date().getFullYear() - new Date(data.date_of_birth).getFullYear() : 0,
+                    birthDate: data.date_of_birth || '',
+                    dmiId: data.external_ref || '',
+                    lastSession: data.last_session || new Date().toLocaleDateString('fr-FR'),
+                    color: ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][Math.floor(Math.random() * 6)],
+                    phone: data.phone || '',
+                    gender: data.gender || '',
+                    createdAt: data.created_at || new Date().toISOString(),
+                }
+                return { success: true, data: patient }
+            }
+            return { success: false, error: data.detail || data.message || 'Patient non trouvé' }
+        } catch (error) {
+            console.error('Erreur réseau:', error)
+            return { success: false, error: 'Erreur réseau' }
+        }
+    },
+
     create: async (patientData: {
         first_name: string
         last_name: string
@@ -107,6 +169,7 @@ export const patientsApi = {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
                     'X-CSRF-Token': getCsrfToken(),
                 },
                 body: JSON.stringify(patientData),
@@ -140,14 +203,106 @@ export const patientsApi = {
             return { success: false, error: 'Erreur réseau' }
         }
     },
+
+    update: async (patientId: string, patientData: {
+        first_name?: string
+        last_name?: string
+        date_of_birth?: string
+        external_ref?: string
+        phone?: string
+        gender?: string
+    }): Promise<ApiResponse<Patient>> => {
+        const token = getToken()
+        if (!token) return { success: false, error: 'Non authentifié' }
+
+        try {
+            const response = await fetch(`${API_URL}/patients/${patientId}`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'X-CSRF-Token': getCsrfToken(),
+                },
+                body: JSON.stringify(patientData),
+            })
+
+            if (response.status === 401) {
+                return { success: false, error: 'Non authentifié' }
+            }
+
+            const data = await response.json()
+
+            if (response.ok) {
+                const updatedPatient: Patient = {
+                    id: String(data.id),
+                    name: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
+                    initials: `${(data.first_name || '')[0] || ''}${(data.last_name || '')[0] || ''}`,
+                    age: data.date_of_birth ? new Date().getFullYear() - new Date(data.date_of_birth).getFullYear() : 0,
+                    birthDate: data.date_of_birth || '',
+                    dmiId: data.external_ref || '',
+                    phone: data.phone || '',
+                    gender: data.gender || '',
+                    lastSession: data.last_session || new Date().toLocaleDateString('fr-FR'),
+                    color: ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'][Math.floor(Math.random() * 6)],
+                    createdAt: data.created_at || new Date().toISOString(),
+                }
+                return { success: true, data: updatedPatient }
+            }
+            return { success: false, error: data.detail || data.message || 'Erreur' }
+        } catch (error) {
+            console.error('Erreur réseau:', error)
+            return { success: false, error: 'Erreur réseau' }
+        }
+    },
+
+    delete: async (patientId: string): Promise<ApiResponse<void>> => {
+        const token = getToken()
+        if (!token) return { success: false, error: 'Non authentifié' }
+
+        try {
+            const response = await fetch(`${API_URL}/patients/${patientId}`, {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'X-CSRF-Token': getCsrfToken(),
+                },
+            })
+
+            if (response.status === 401) {
+                return { success: false, error: 'Non authentifié' }
+            }
+
+            if (response.ok) {
+                return { success: true }
+            }
+
+            const data = await response.json()
+            return { success: false, error: data.detail || data.message || 'Erreur' }
+        } catch (error) {
+            console.error('Erreur réseau:', error)
+            return { success: false, error: 'Erreur réseau' }
+        }
+    },
 }
 
 // ===================== REPORT API =====================
 export const reportsApi = {
     getByPatientId: async (patientId: string): Promise<ApiResponse<PatientReport>> => {
         try {
-            const response = await fetch(`${API_URL}/api/reports/${patientId}`, {
+            const token = getToken()
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+
+            const response = await fetch(`${API_URL}/reports/${patientId}`, {
+                method: 'GET',
                 credentials: 'include',
+                headers,
             })
 
             if (response.status === 401) {
@@ -161,14 +316,23 @@ export const reportsApi = {
             }
             return { success: false, error: data.message || data.detail || 'Erreur' }
         } catch (error) {
+            console.error('Erreur réseau:', error)
             return { success: false, error: 'Erreur réseau' }
         }
     },
 
     exportPdf: async (patientId: string): Promise<Blob | null> => {
         try {
-            const response = await fetch(`${API_URL}/api/reports/${patientId}/pdf`, {
+            const token = getToken()
+            const headers: HeadersInit = {}
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+
+            const response = await fetch(`${API_URL}/reports/${patientId}/pdf`, {
+                method: 'GET',
                 credentials: 'include',
+                headers,
             })
 
             if (response.ok) {
@@ -176,6 +340,7 @@ export const reportsApi = {
             }
             return null
         } catch (error) {
+            console.error('Erreur export PDF:', error)
             return null
         }
     },
@@ -195,7 +360,10 @@ export const uploadApi = {
         patientId: string,
         testType: string = 'cognitive',
         onProgress?: (progress: number) => void
-    ): Promise<ApiResponse<{ uploadId: string; status: string }>> => {
+    ): Promise<ApiResponse<{ session_id: string; status: string }>> => {
+        const token = getToken()
+        if (!token) return { success: false, error: 'Non authentifié' }
+
         try {
             const formData = new FormData()
             formData.append('audio', audioBlob, `${patientId}_${testType}_${Date.now()}.webm`)
@@ -204,7 +372,7 @@ export const uploadApi = {
 
             const xhr = new XMLHttpRequest()
 
-            const promise = new Promise<ApiResponse<{ uploadId: string; status: string }>>((resolve) => {
+            const promise = new Promise<ApiResponse<{ session_id: string; status: string }>>((resolve) => {
                 xhr.upload.addEventListener('progress', (event) => {
                     if (event.lengthComputable && onProgress) {
                         const progress = Math.round((event.loaded / event.total) * 100)
@@ -213,7 +381,7 @@ export const uploadApi = {
                 })
 
                 xhr.addEventListener('load', () => {
-                    if (xhr.status === 200) {
+                    if (xhr.status === 200 || xhr.status === 201 || xhr.status === 202) {
                         try {
                             const data = JSON.parse(xhr.responseText)
                             resolve({ success: true, data })
@@ -223,7 +391,12 @@ export const uploadApi = {
                     } else if (xhr.status === 401) {
                         resolve({ success: false, error: 'Non authentifié' })
                     } else {
-                        resolve({ success: false, error: 'Erreur upload' })
+                        try {
+                            const data = JSON.parse(xhr.responseText)
+                            resolve({ success: false, error: data.detail || data.message || 'Erreur upload' })
+                        } catch {
+                            resolve({ success: false, error: `Erreur ${xhr.status}` })
+                        }
                     }
                 })
 
@@ -232,14 +405,78 @@ export const uploadApi = {
                 })
             })
 
-            xhr.open('POST', `${API_URL}/api/upload`)
+            xhr.open('POST', `${API_URL}/sessions/upload`)
             xhr.withCredentials = true
-            // If the upload endpoint is CSRF-protected, uncomment the next line:
-            // xhr.setRequestHeader('X-CSRF-Token', getCsrfToken())
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`)
             xhr.send(formData)
 
             return await promise
         } catch (error) {
+            console.error('Erreur upload:', error)
+            return { success: false, error: 'Erreur réseau' }
+        }
+    },
+
+    getStatus: async (sessionId: string): Promise<ApiResponse<any>> => {
+        try {
+            const token = getToken()
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+
+            const response = await fetch(`${API_URL}/sessions/${sessionId}/status`, {
+                method: 'GET',
+                credentials: 'include',
+                headers,
+            })
+
+            if (response.status === 401) {
+                return { success: false, error: 'Non authentifié' }
+            }
+
+            const data = await response.json()
+
+            if (response.ok) {
+                return { success: true, data }
+            }
+            return { success: false, error: data.detail || data.message || 'Erreur' }
+        } catch (error) {
+            console.error('Erreur réseau:', error)
+            return { success: false, error: 'Erreur réseau' }
+        }
+    },
+
+    getPatientSessions: async (patientId: string, limit: number = 10): Promise<ApiResponse<any[]>> => {
+        try {
+            const token = getToken()
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            }
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`
+            }
+
+            const response = await fetch(`${API_URL}/patients/${patientId}/sessions?limit=${limit}`, {
+                method: 'GET',
+                credentials: 'include',
+                headers,
+            })
+
+            if (response.status === 401) {
+                return { success: false, error: 'Non authentifié' }
+            }
+
+            const data = await response.json()
+
+            if (response.ok) {
+                return { success: true, data }
+            }
+            return { success: false, error: data.detail || data.message || 'Erreur' }
+        } catch (error) {
+            console.error('Erreur réseau:', error)
             return { success: false, error: 'Erreur réseau' }
         }
     },
@@ -248,8 +485,16 @@ export const uploadApi = {
 // ===================== WEBSOCKET =====================
 async function fetchWsTicket(): Promise<string | null> {
     try {
-        const response = await fetch(`${API_URL}/auth/ws-ticket`, {
+        const token = getToken()
+        const headers: HeadersInit = {}
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`
+        }
+
+        const response = await fetch(`${API_URL}/ws-ticket`, {
+            method: 'GET',
             credentials: 'include',
+            headers,
         })
         if (!response.ok) return null
         const data = await response.json()
@@ -259,7 +504,6 @@ async function fetchWsTicket(): Promise<string | null> {
     }
 }
 
-// ===================== WEBSOCKET =====================
 export const metricsWebSocket = {
     connect: (
         patientId: string,
@@ -302,6 +546,12 @@ export const metricsWebSocket = {
             console.error('WebSocket connection error:', e)
             onError('Erreur de connexion WebSocket')
             return null
+        }
+    },
+
+    disconnect: (ws: WebSocket | null) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close()
         }
     }
 }

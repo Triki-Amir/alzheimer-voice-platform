@@ -79,9 +79,23 @@ export default function TestResultPage({ params }: TestResultPageProps) {
                 }
 
                 // Charger le patient depuis l'API
-                const patientResult = await patientsApi.getById(patientId)
-                if (patientResult.success && patientResult.data) {
-                    setPatient(patientResult.data)
+                const patientsResult = await patientsApi.getAll()
+                if (patientsResult.success && patientsResult.data) {
+                    type ApiPatientLike = {
+                        id?: string | number
+                        external_ref?: string | null
+                    }
+
+                    const foundPatient = patientsResult.data.find(
+                        (item: ApiPatientLike) => String(item.id) === patientId || item.external_ref === patientId
+                    ) as Patient | undefined
+
+                    if (foundPatient) {
+                        setPatient(foundPatient)
+                    } else {
+                        setError('Patient non trouvé')
+                        return
+                    }
                 } else {
                     setError('Patient non trouvé')
                     return

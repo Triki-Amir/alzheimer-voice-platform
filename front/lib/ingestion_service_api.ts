@@ -46,28 +46,37 @@ export const ingestionApi = {
         }
 
         try {
-            const formData = new FormData()
+            // ✅ CORRECTION : Si le blob est video/webm, le convertir en audio/webm
+            let finalBlob = audioBlob
+            if (audioBlob.type === 'video/webm' || audioBlob.type === 'video/web') {
+                console.log('🔄 Converting video/webm to audio/webm')
+                finalBlob = new Blob([audioBlob], { type: 'audio/webm' })
+            }
             
-            // ✅ Append patient_id as string
+            // ✅ Si le blob n'a pas de type ou est vide, forcer audio/webm
+            if (!finalBlob.type || finalBlob.type === '') {
+                console.log('🔄 Forcing MIME type to audio/webm')
+                finalBlob = new Blob([finalBlob], { type: 'audio/webm' })
+            }
+
+            const formData = new FormData()
             formData.append('patient_id', patientId)
             
-            // ✅ Append audio file with proper filename
             const filename = `${patientId}_${testType}_${Date.now()}.webm`
-            formData.append('audio', audioBlob, filename)
+            formData.append('audio', finalBlob, filename)
 
-            // ✅ Log FormData contents for debugging
             console.log('📤 Uploading audio:', {
                 patientId,
                 filename,
-                fileSize: audioBlob.size,
-                fileType: audioBlob.type
+                fileSize: finalBlob.size,
+                originalType: audioBlob.type,
+                finalType: finalBlob.type  // ✅ Devrait être 'audio/webm'
             })
 
             const response = await fetch(`${INGESTION_URL}/sessions/upload`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
-                    // ❌ DON'T set Content-Type header - let the browser set it with boundary
                 },
                 body: formData,
             })

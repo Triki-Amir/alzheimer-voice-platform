@@ -43,8 +43,21 @@ export default function PatientsPage() {
     const loadPatients = async () => {
         setIsLoading(true)
         const result = await patientsApi.getAll()
+
         if (result.success && result.data) {
-            setPatients(result.data)
+            const normalizedPatients: Patient[] = (result.data as any[]).map((patient: any) => ({
+                ...patient,
+                id: String(patient.id ?? ''),
+                name:
+                    patient.name ??
+                    (
+                        `${patient.first_name ?? ''} ${patient.last_name ?? ''}`.trim() ||
+                        `Patient ${String(patient.id ?? '')}`
+                    ),
+                gender: patient.gender as 'Homme' | 'Femme' | undefined,
+            }))
+
+            setPatients(normalizedPatients)
         } else {
             console.error('Erreur chargement patients:', result.error)
         }
@@ -67,8 +80,15 @@ export default function PatientsPage() {
         console.log('📥 Résultat:', result)
 
         if (result.success && result.data) {
-            setPatients([result.data, ...patients])
-            alert(`✅ Patient ${result.data.name} ajouté avec succès !`)
+            const normalizedPatient: Patient = {
+                ...result.data,
+                id: String(result.data.id),
+                name: result.data.name ?? ((`${newPatient.first_name} ${newPatient.last_name}`.trim()) || `Patient ${String(result.data.id)}`),
+                gender: result.data.gender as 'Homme' | 'Femme' | undefined,
+            }
+
+            setPatients(prevPatients => [normalizedPatient, ...prevPatients])
+            alert(`✅ Patient ${normalizedPatient.name} ajouté avec succès !`)
             setIsFormOpen(false)
             loadPatients()
         } else {

@@ -176,8 +176,27 @@ export default function DashboardPage() {
         setIsLoading(true)
         const result = await patientsApi.getAll()
         if (result.success && result.data) {
-            setPatients(result.data)
-            setStats(calculateStats(result.data))
+            const normalizedPatients: Patient[] = result.data.map((patient) => {
+                const normalizedGender: Patient['gender'] = patient.gender === 'Homme' || patient.gender === 'Femme'
+                    ? patient.gender
+                    : undefined
+
+                return {
+                    ...patient,
+                    id: String(patient.id),
+                    name: patient.name || `${patient.initials || ''}`.trim(),
+                    initials: patient.initials || (patient.name || '').split(' ').map(part => part[0]?.toUpperCase() || '').join('').slice(0, 2),
+                    age: Number(patient.age) || 0,
+                    birthDate: patient.birthDate || '',
+                    dmiId: patient.dmiId || '',
+                    gender: normalizedGender,
+                    lastSession: patient.lastSession || '',
+                    color: patient.color || '#2563EB',
+                }
+            })
+
+            setPatients(normalizedPatients)
+            setStats(calculateStats(normalizedPatients))
         } else {
             console.error('Erreur chargement patients:', result.error)
         }
@@ -221,11 +240,27 @@ export default function DashboardPage() {
         }
 
         const result = await patientsApi.create(newPatient)
-        
+        console.log('Résultat création patient:', result.data)
         if (result.success && result.data) {
-            setPatients([result.data, ...patients])
-            setStats(calculateStats([result.data, ...patients]))
-            alert(`✅ Patient ${result.data.name} ajouté avec succès !`)
+            const normalizedNewPatient: Patient = {
+                ...result.data,
+                id: String(result.data.id),
+                name: result.data.name || `${formData.firstName} ${formData.lastName}`.trim() || 'Nouveau patient',
+                initials: result.data.initials || `${formData.firstName?.charAt(0)?.toUpperCase() || ''}${formData.lastName?.charAt(0)?.toUpperCase() || ''}`,
+                age: Number(result.data.age) || 0,
+                birthDate: result.data.birthDate || formData.birthDate,
+                dmiId: result.data.dmiId || formData.dmiId || '',
+                gender: result.data.gender === 'Homme' || result.data.gender === 'Femme'
+                    ? result.data.gender
+                    : undefined,
+                lastSession: result.data.lastSession || '',
+                color: result.data.color || '#2563EB',
+            }
+
+            const nextPatients = [normalizedNewPatient, ...patients]
+            setPatients(nextPatients)
+            setStats(calculateStats(nextPatients))
+            alert(`✅ Patient ${normalizedNewPatient.name} ajouté avec succès !`)
             setIsFormOpen(false)
         } else {
             alert(`❌ Erreur: ${result.error || 'Impossible d\'ajouter le patient'}`)

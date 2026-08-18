@@ -8,6 +8,7 @@ python-magic
 pydantic
 python-multipart
 aiofiles
-soundfile  # ← Add this
-librosa    # ← Add this (often used with soundfile)
-numpy      # ← Add this (often used with soundfile)
+soundfile 
+librosa   
+numpy    
+pika==1.3.2  

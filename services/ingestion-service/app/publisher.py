@@ -1,180 +1,93 @@
-# storage.py
-import uuid
+# services/ingestion-service/app/publisher.py
 import json
-from datetime import datetime
-from sqlalchemy.orm import Session as DBSession
-from voiceplatform_shared.db_models import Session, Patient
-from voiceplatform_shared.crypto import generate_data_key, wrap_key, encrypt_bytes
-from voiceplatform_shared.minio_client import get_minio_client
+import os
+import logging
+import pika
+from typing import Dict, Any
 
-def create_session(db: DBSession, patient_id: uuid.UUID, audio_bytes: bytes):
+logger = logging.getLogger(__name__)
+
+
+def get_rabbitmq_connection():
     """
-    Create a new session record in the database and encrypt the audio data.
-    
-    Args:
-        db: Database session
-        patient_id: UUID of the patient
-        audio_bytes: Raw audio bytes to encrypt
-    
-    Returns:
-        tuple: (session_record, encrypted_audio_bytes)
+    Établit une connexion à RabbitMQ en utilisant les variables d'environnement.
     """
-    # Generate encryption key
-    data_key = generate_data_key()
-    wrapped_key = wrap_key(data_key)
-    
-    # Encrypt the audio
-    encrypted_audio = encrypt_bytes(data_key, audio_bytes)
-    
-    # Create session record
-    session = Session(
-        id=uuid.uuid4(),
-        patient_id=patient_id,
-        created_at=datetime.utcnow(),
-        status="pending",
-        wrapped_data_key=wrapped_key,
-        metadata=json.dumps({
-            "uploaded_at": datetime.utcnow().isoformat(),
-            "status": "uploaded"
-        })
+    credentials = pika.PlainCredentials(
+        os.environ.get("RABBITMQ_DEFAULT_USER", "voiceapp"),
+        os.environ.get("RABBITMQ_DEFAULT_PASS", "changeme_strong_password")
     )
     
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    params = pika.ConnectionParameters(
+        host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
+        port=int(os.environ.get("RABBITMQ_PORT", 5671)),
+        credentials=credentials,
+        heartbeat=60,
+    )
     
-    return session, encrypted_audio
+    return pika.BlockingConnection(params)
 
-def get_session(db: DBSession, session_id: uuid.UUID):
+
+def publish_session_message(queue_name: str, message: Dict[str, Any]):
     """
-    Get a session by ID.
+    Publie un message sur une queue RabbitMQ.
     
     Args:
-        db: Database session
-        session_id: UUID of the session
-    
-    Returns:
-        Session record or None
+        queue_name: Nom de la queue (ex: "preprocessing", "quality_check")
+        message: Dictionnaire contenant le message à envoyer
     """
-    return db.query(Session).filter(Session.id == session_id).first()
-
-def update_session_status(db: DBSession, session_id: uuid.UUID, status: str, error: str = None):
-    """
-    Update the status of a session.
-    
-    Args:
-        db: Database session
-        session_id: UUID of the session
-        status: New status (pending, processing, completed, failed)
-        error: Optional error message
-    """
-    session = get_session(db, session_id)
-    if session:
-        session.status = status
-        if error:
-            # Update metadata with error
-            metadata = json.loads(session.metadata or "{}")
-            metadata["error"] = error
-            metadata["failed_at"] = datetime.utcnow().isoformat()
-            session.metadata = json.dumps(metadata)
-        else:
-            # Update metadata with status
-            metadata = json.loads(session.metadata or "{}")
-            metadata["updated_at"] = datetime.utcnow().isoformat()
-            metadata["status"] = status
-            session.metadata = json.dumps(metadata)
+    try:
+        connection = get_rabbitmq_connection()
+        channel = connection.channel()
         
-        db.commit()
+        # Déclarer la queue comme durable
+        channel.queue_declare(
+            queue=queue_name,
+            durable=True,
+            arguments={
+                "x-queue-type": "classic"
+            }
+        )
+        
+        # Publier le message
+        channel.basic_publish(
+            exchange="",
+            routing_key=queue_name,
+            body=json.dumps(message).encode("utf-8"),
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # 2 = persistant (survit au redémarrage)
+                content_type="application/json",
+            )
+        )
+        
+        logger.info(f"📤 Message publié sur la queue '{queue_name}': {message.get('session_id', 'unknown')}")
+        connection.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de la publication sur '{queue_name}': {e}")
+        raise
 
-def get_patient_sessions(db: DBSession, patient_id: uuid.UUID, limit: int = 10):
-    """
-    Get all sessions for a patient.
-    
-    Args:
-        db: Database session
-        patient_id: UUID of the patient
-        limit: Maximum number of sessions to return
-    
-    Returns:
-        List of Session records
-    """
-    return (
-        db.query(Session)
-        .filter(Session.patient_id == patient_id)
-        .order_by(Session.created_at.desc())
-        .limit(limit)
-        .all()
-    )
 
-def delete_session(db: DBSession, session_id: uuid.UUID):
+def publish_to_preprocessing(session_id: str, patient_id: str, raw_audio_path: str, wrapped_data_key: str):
     """
-    Delete a session and its associated audio file from MinIO.
-    
-    Args:
-        db: Database session
-        session_id: UUID of the session
-    
-    Returns:
-        bool: True if deleted, False if not found
+    Publie un message sur la queue PREPROCESSING.
     """
-    session = get_session(db, session_id)
-    if not session:
-        return False
-    
-    # Delete audio from MinIO
-    if session.raw_audio_path:
-        try:
-            minio = get_minio_client()
-            minio.remove_object("raw-audio", session.raw_audio_path)
-        except Exception as e:
-            print(f"Error deleting audio from MinIO: {e}")
-    
-    # Delete session from database
-    db.delete(session)
-    db.commit()
-    
-    return True
-
-def get_session_status(db: DBSession, session_id: uuid.UUID):
-    """
-    Get the status of a session.
-    
-    Args:
-        db: Database session
-        session_id: UUID of the session
-    
-    Returns:
-        dict: Session status info
-    """
-    session = get_session(db, session_id)
-    if not session:
-        return None
-    
-    metadata = json.loads(session.metadata or "{}")
-    
-    return {
-        "session_id": str(session.id),
-        "patient_id": str(session.patient_id),
-        "status": session.status,
-        "created_at": session.created_at.isoformat(),
-        "metadata": metadata,
-        "has_audio": session.raw_audio_path is not None
+    message = {
+        "session_id": session_id,
+        "patient_id": patient_id,
+        "raw_audio_path": raw_audio_path,
+        "wrapped_data_key": wrapped_data_key,
+        "timestamp": "2026-08-16T00:00:00Z",  # À remplacer par datetime.utcnow().isoformat()
     }
+    publish_session_message("preprocessing", message)
 
-def get_patient_by_id(db: DBSession, patient_id: uuid.UUID, doctor_id: uuid.UUID):
+
+def publish_to_quality_check(session_id: str, raw_audio_path: str):
     """
-    Get a patient by ID and verify doctor ownership.
-    
-    Args:
-        db: Database session
-        patient_id: UUID of the patient
-        doctor_id: UUID of the doctor
-    
-    Returns:
-        Patient record or None
+    Publie un message sur la queue QUALITY_CHECK.
     """
-    return (
-        db.query(Patient)
-        .filter(Patient.id == patient_id, Patient.doctor_id == doctor_id)
-        .first()
-    )
+    message = {
+        "session_id": session_id,
+        "raw_audio_path": raw_audio_path,
+        "timestamp": "2026-08-16T00:00:00Z",
+    }
+    publish_session_message("quality_check", message)
