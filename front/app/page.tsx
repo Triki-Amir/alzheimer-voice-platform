@@ -1,3 +1,4 @@
+// app/page.tsx
 'use client'
 
 import { useState } from 'react'
@@ -8,7 +9,7 @@ import {
     setup2FA,
     confirm2FA,
     verify2FA,
-    saveSession,
+    fetchUserFromBackend,
     AuthError,
 } from '@/lib/auth'
 
@@ -27,7 +28,6 @@ export default function LoginPage() {
     const [qrCodeBase64, setQrCodeBase64] = useState('')
     const [totpSecret, setTotpSecret] = useState('')
     const [backupCodes, setBackupCodes] = useState<string[]>([])
-    const [pendingAccessToken, setPendingAccessToken] = useState('')
 
     const [error, setError] = useState('')
     const [isLoading, setIsLoading] = useState(false)
@@ -67,7 +67,6 @@ export default function LoginPage() {
         try {
             const result = await confirm2FA(preAuthToken, code)
             setBackupCodes(result.backupCodes)
-            setPendingAccessToken(result.accessToken)
             setStep('backup-codes')
         } catch (err) {
             setError(describeError(err))
@@ -77,67 +76,62 @@ export default function LoginPage() {
     }
 
     // ==================== ETAPE 2b : verifier la 2FA (connexions suivantes) ====================
-    // ==================== ETAPE 2b : verifier la 2FA (connexions suivantes) ====================
-const handleVerify2FA = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setIsLoading(true)
+    const handleVerify2FA = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError('')
+        setIsLoading(true)
 
-    try {
-        console.log('🔍 === DÉBUT VÉRIFICATION 2FA ===');
-        console.log('📌 PreAuthToken:', preAuthToken ? preAuthToken.substring(0, 30) + '...' : '❌ MANQUANT');
-        console.log('📌 Code 2FA:', code);
-        
-        // ✅ Vérifier que le preAuthToken existe
-        if (!preAuthToken) {
-            console.error('❌ PreAuthToken manquant!');
-            throw new Error('Token de pré-authentification manquant. Veuillez vous reconnecter.');
-        }
+        try {
+            console.log('🔍 === DÉBUT VÉRIFICATION 2FA ===');
+            console.log('📌 PreAuthToken:', preAuthToken ? preAuthToken.substring(0, 30) + '...' : '❌ MANQUANT');
+            console.log('📌 Code 2FA:', code);
+            
+            if (!preAuthToken) {
+                console.error('❌ PreAuthToken manquant!');
+                throw new Error('Token de pré-authentification manquant. Veuillez vous reconnecter.');
+            }
 
-        // ✅ Vérifier que le code fait 6 chiffres
-        if (!code || code.length !== 6) {
-            console.error('❌ Code invalide:', code);
-            throw new Error('Le code doit contenir exactement 6 chiffres.');
-        }
+            if (!code || code.length !== 6) {
+                console.error('❌ Code invalide:', code);
+                throw new Error('Le code doit contenir exactement 6 chiffres.');
+            }
 
-        console.log('📤 Envoi de la requête à /login/verify-2fa...');
-        
-        const accessToken = await verify2FA(preAuthToken, code);
-        
-        console.log('📥 Réponse reçue:', accessToken ? '✅ Token reçu' : '❌ Pas de token');
-        console.log('🔑 Token:', accessToken ? accessToken.substring(0, 30) + '...' : '❌');
-
-        if (!accessToken) {
-            console.error('❌ Le serveur n\'a pas renvoyé de token d\'accès.');
-            throw new Error('Le serveur n\'a pas renvoyé de token d\'accès.');
+            console.log('📤 Envoi de la requête à /login/verify-2fa...');
+            
+            // ✅ verify2FA ne retourne plus de token - il est dans le cookie
+            await verify2FA(preAuthToken, code);
+            
+            console.log('✅ 2FA vérifiée, récupération de l\'utilisateur...');
+            
+            // ✅ Récupérer l'utilisateur depuis le backend via le cookie
+            const user = await fetchUserFromBackend();
+            
+            if (!user) {
+                throw new Error('Impossible de récupérer les informations utilisateur.');
+            }
+            
+            console.log('✅ Utilisateur connecté:', user);
+            console.log('🚀 Redirection vers /dashboard...');
+            router.push('/dashboard');
+            
+        } catch (err) {
+            console.error('❌ === ERREUR DANS handleVerify2FA ===');
+            console.error('❌ Détails de l\'erreur:', err);
+            setError(describeError(err));
+        } finally {
+            console.log('🔚 === FIN VÉRIFICATION 2FA ===');
+            setIsLoading(false);
         }
-        
-        console.log('💾 Sauvegarde de la session...');
-        saveSession(accessToken);
-        console.log('✅ Session sauvegardée avec succès!');
-        
-        console.log('🚀 Redirection vers /dashboard...');
-        router.push('/dashboard');
-        
-    } catch (err) {
-        console.error('❌ === ERREUR DANS handleVerify2FA ===');
-        console.error('❌ Type d\'erreur:', typeof err);
-        console.error('❌ Détails de l\'erreur:', err);
-        
-        if (err instanceof Error) {
-            console.error('❌ Message:', err.message);
-            console.error('❌ Stack:', err.stack);
-        }
-        
-        setError(describeError(err));
-    } finally {
-        console.log('🔚 === FIN VÉRIFICATION 2FA ===');
-        setIsLoading(false);
     }
-};
-    const handleContinueAfterBackupCodes = () => {
-        saveSession(pendingAccessToken)
-        router.push('/dashboard')
+
+    const handleContinueAfterBackupCodes = async () => {
+        // ✅ Récupérer l'utilisateur depuis le backend via le cookie
+        const user = await fetchUserFromBackend()
+        if (user) {
+            router.push('/dashboard')
+        } else {
+            setError('Impossible de récupérer les informations utilisateur.')
+        }
     }
 
     return (

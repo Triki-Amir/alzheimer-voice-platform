@@ -1,3 +1,4 @@
+// app/patient/[id]/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,7 +8,7 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { getUser, verifySession } from '@/lib/auth'
 import type { Patient, User } from '@/types'
 
 interface PatientPageProps {
@@ -26,18 +27,30 @@ export default function PatientPage({ params }: PatientPageProps) {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const token = getToken()
-                if (!token) {
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
                     router.push('/')
                     return
                 }
 
-                const userData = localStorage.getItem('user')
+                const userData = getUser()
                 if (!userData) {
                     router.push('/')
                     return
                 }
-                setUser(JSON.parse(userData))
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
 
                 const { id } = await params
 
@@ -62,19 +75,10 @@ export default function PatientPage({ params }: PatientPageProps) {
         setError(null)
 
         try {
-            const result = await patientsApi.getAll()
+            const result = await patientsApi.getById(patientId)
 
             if (result.success && result.data) {
-                const foundPatient = result.data.find((patient) => String(patient.id) === patientId)
-
-                if (foundPatient) {
-                    setPatient(foundPatient as Patient)
-                } else {
-                    setError('Patient non trouvé')
-                    setTimeout(() => {
-                        router.push('/dashboard')
-                    }, 2000)
-                }
+                setPatient(result.data)
             } else {
                 setError(result.error || 'Patient non trouvé')
                 setTimeout(() => {

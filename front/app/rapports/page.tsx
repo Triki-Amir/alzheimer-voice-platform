@@ -8,7 +8,7 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { getUser, verifySession } from '@/lib/auth'
 import type { User, Patient } from '@/types'
 
 // ==================== TYPES ====================
@@ -42,19 +42,41 @@ export default function RapportsPage() {
     const [filteredReports, setFilteredReports] = useState<ReportSummary[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
+    // ✅ Vérifier l'authentification via le cookie
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
+        const loadData = async () => {
+            try {
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
+                await loadPatients()
+            } catch (error) {
+                console.error('❌ Erreur:', error)
+                router.push('/')
+            }
         }
 
-        const userData = localStorage.getItem('user')
-        if (userData) {
-            setUser(JSON.parse(userData))
-        }
-
-        loadPatients()
+        loadData()
     }, [router])
 
     const loadPatients = async () => {
@@ -260,7 +282,6 @@ export default function RapportsPage() {
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${diagnosis.color}`}>
                                                 {diagnosis.label}
                                             </span>
-                                            
                                         </div>
                                     </div>
                                 )

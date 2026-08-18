@@ -11,10 +11,9 @@ import {
     setup2FA,
     confirm2FA,
     enrollDoctorVoice,
-    saveSession,
     AuthError,
 } from '@/lib/auth'
-import type { DoctorRegistrationData, PracticeType } from '@/types'
+import type { DoctorRegistrationData, PracticeType, User } from '@/types'
 
 const HOSPITALS = [
     'Hôpital Sahloul - Sousse',
@@ -39,6 +38,8 @@ const PRACTICE_TYPES: { value: PracticeType; label: string }[] = [
 // A migrer vers de vraies colonnes si ces infos doivent être partagées
 // entre navigateurs/appareils.
 const PROFILE_EXTRA_KEY = 'ehealth_doctor_profile_extra'
+const USER_KEY = 'user'
+const API_URL = 'http://localhost:8000'
 
 type Step = 'info' | 'setup-2fa' | 'backup-codes' | 'voice'
 
@@ -65,7 +66,6 @@ export default function RegisterPage() {
     const [qrCodeBase64, setQrCodeBase64] = useState('')
     const [totpSecret, setTotpSecret] = useState('')
     const [backupCodes, setBackupCodes] = useState<string[]>([])
-    const [accessToken, setAccessToken] = useState('')
 
     const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null)
     const [voiceDuration, setVoiceDuration] = useState(0)
@@ -92,6 +92,28 @@ export default function RegisterPage() {
         if (hospital === 'Hôpital Militaire - Tunis') return '🏥 Militaire'
         if (hospital === 'Hôpital Fattouma Bourguiba - Monastir') return '🏥 Fattouma Bourguiba'
         return '🏥 Autre'
+    }
+
+    // ✅ Récupérer l'utilisateur depuis le backend via le cookie
+    const fetchUserFromBackend = async (): Promise<User | null> => {
+        try {
+            const response = await fetch(`${API_URL}/verify`, {
+                credentials: 'include',  // ✅ Envoie le cookie automatiquement
+            })
+            if (!response.ok) return null
+            const data = await response.json()
+            const user: User = {
+                id: data.sub,
+                email: data.email,
+                role: data.role || 'clinician',
+                name: data.email?.split('@')[0] ?? 'Docteur',
+            }
+            localStorage.setItem(USER_KEY, JSON.stringify(user))
+            return user
+        } catch (error) {
+            console.error('❌ Erreur récupération utilisateur:', error)
+            return null
+        }
     }
 
     // ==================== ÉTAPE 1 : inscription (email + mdp) ====================
@@ -142,7 +164,8 @@ export default function RegisterPage() {
 
         try {
             const result = await confirm2FA(preAuthToken, code)
-            setAccessToken(result.accessToken)
+            // ✅ Le token est dans le cookie - pas besoin de le stocker
+            // On garde juste les backup codes
             setBackupCodes(result.backupCodes)
             setStep('backup-codes')
         } catch (err) {
@@ -169,11 +192,13 @@ export default function RegisterPage() {
         setIsLoading(true)
         try {
             const filename = `${formData.firstName}_${formData.lastName}_${Date.now()}_reference.wav`
-            await enrollDoctorVoice(accessToken, voiceBlob, filename)
+            
+            // ✅ Le cookie est envoyé automatiquement avec credentials: 'include'
+            await enrollDoctorVoice(voiceBlob, filename)
 
-            // Session finale + profil "extra" (hôpital/pratique) en local,
-            // keyé par l'id du médecin extrait du token.
-            const user = saveSession(accessToken)
+            // ✅ Récupérer l'utilisateur depuis le backend via le cookie
+            const user = await fetchUserFromBackend()
+            
             if (user) {
                 let hospitalValue = formData.hospital
                 if (formData.practiceType === 'cabinet') {

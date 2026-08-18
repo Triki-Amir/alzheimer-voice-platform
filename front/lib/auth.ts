@@ -10,7 +10,8 @@
 //   2b) requires_2fa_setup = false -> POST /login/verify-2fa with the
 //       6-digit code (or a backup code)
 //
-// Both 2b) and 2a)'s confirm step return the final access_token.
+// Both 2b) and 2a)'s confirm step set the access_token in an HttpOnly cookie.
+// The frontend NEVER reads the token directly - it's handled by the browser.
 
 const API_URL = 'http://localhost:8000'
 
@@ -39,7 +40,6 @@ export interface TwoFactorSetup {
 }
 
 export interface TwoFactorConfirmResult {
-    accessToken: string
     backupCodes: string[]
 }
 
@@ -119,26 +119,27 @@ export async function registerDoctor(
     }
 }
 
-// ===================== Enrolement vocal (post-2FA) =====================
-export async function enrollDoctorVoice(accessToken: string, audioBlob: Blob, filename: string): Promise<void> {
+// ===================== Enrôlement vocal =====================
+export async function enrollDoctorVoice(
+    audioBlob: Blob, 
+    filename: string
+): Promise<void> {
     console.log('🎵 Audio:', filename, audioBlob.size, 'bytes')
     console.log('📍 URL voix:', `${API_URL}/doctors/voice-enroll`)
-    
-    if (!accessToken) {
-        throw new AuthError('Token manquant - Veuillez vous reconnecter', 401)
-    }
 
     const formData = new FormData()
     formData.append('audio', audioBlob, filename)
 
     try {
+        console.log('📤 Envoi de la requête...')
+        
         const response = await fetch(`${API_URL}/doctors/voice-enroll`, {
             method: 'POST',
-            credentials: 'include',
+            credentials: 'include',  // ✅ Envoie le cookie automatiquement
             body: formData,
         })
 
-        console.log('📝 Status voix:', response.status)
+        console.log('📥 Status voix:', response.status)
 
         if (response.status === 401) {
             localStorage.removeItem(USER_KEY)
@@ -147,10 +148,13 @@ export async function enrollDoctorVoice(accessToken: string, audioBlob: Blob, fi
         }
 
         if (!response.ok) {
+            const errorText = await response.text()
+            console.error('❌ Erreur voix:', errorText)
             throw new AuthError(await parseErrorDetail(response), response.status)
         }
         
-        console.log('✅ Voix enregistrée!')
+        const data = await response.json()
+        console.log('✅ Voix enregistrée!', data)
     } catch (error) {
         console.error('❌ Erreur voix:', error)
         if (error instanceof AuthError) throw error
@@ -233,29 +237,29 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
         const response = await fetch(`${API_URL}/2fa/confirm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
+            credentials: 'include',  // ✅ Important pour le cookie
             body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
         })
 
-        if (!response.ok) {
-            const errorText = await response.text()
-            console.error('❌ Erreur confirm 2FA:', response.status, errorText)
-            throw new AuthError(await parseErrorDetail(response), response.status)
-        }
-
-        const data = await response.json()
-        console.log('📝 2FA confirm response:', data)
-
-        // ✅ Extraire le token
-        const accessToken = data.access_token || data.token || data.accessToken
+        const responseText = await response.text()
+        console.log('📝 2FA confirm response:', responseText)
         
-        if (!accessToken) {
-            console.error('❌ Aucun token trouvé dans la réponse de confirm')
-            throw new AuthError('Token d\'accès non trouvé', 500)
+        let data
+        try {
+            data = JSON.parse(responseText)
+        } catch (e) {
+            console.error('❌ Erreur de parsing JSON:', e)
+            throw new AuthError('Réponse invalide du serveur', response.status)
         }
 
+        if (!response.ok) {
+            console.error('❌ Erreur confirm 2FA:', response.status)
+            throw new AuthError(data.detail || 'Échec de la confirmation 2FA', response.status)
+        }
+
+        // ✅ Le token est dans le cookie HttpOnly - pas besoin de le récupérer
+        // On retourne juste les backup codes
         return {
-            accessToken: accessToken,
             backupCodes: data.backup_codes || [],
         }
     } catch (error) {
@@ -266,7 +270,7 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
 }
 
 // ===================== Etape 2b : verification 2FA (connexions suivantes) =====================
-export async function verify2FA(preAuthToken: string, code: string): Promise<string> {
+export async function verify2FA(preAuthToken: string, code: string): Promise<void> {
     console.log('🔍 === verify2FA ===')
     console.log('📍 URL:', `${API_URL}/login/verify-2fa`)
     console.log('📌 preAuthToken:', preAuthToken?.substring(0, 30) + '...')
@@ -276,7 +280,7 @@ export async function verify2FA(preAuthToken: string, code: string): Promise<str
         const response = await fetch(`${API_URL}/login/verify-2fa`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
+            credentials: 'include',  // ✅ Important pour le cookie
             body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
         })
         
@@ -301,20 +305,9 @@ export async function verify2FA(preAuthToken: string, code: string): Promise<str
             throw new AuthError(detail, response.status)
         }
 
-        // ✅ Extraire le token (plusieurs formats possibles)
-        const accessToken = data.access_token || data.token || data.accessToken
-        
-        if (!accessToken) {
-            console.error('❌ Aucun token trouvé dans la réponse:', data)
-            console.error('❌ Clés disponibles:', Object.keys(data))
-            throw new AuthError('Token d\'accès non trouvé', 500)
-        }
-
-        console.log('✅ Token extrait avec succès!')
-        console.log('🔑 Token (premier 30 chars):', accessToken.substring(0, 30) + '...')
-        
-        // ✅ Retourner le token
-        return accessToken
+        // ✅ Le token est dans le cookie HttpOnly - pas besoin de le récupérer
+        // Le cookie a été défini par le backend
+        console.log('✅ 2FA vérifiée avec succès! Le token est dans le cookie.')
         
     } catch (error) {
         console.error('❌ Erreur verify2FA:', error)
@@ -323,45 +316,44 @@ export async function verify2FA(preAuthToken: string, code: string): Promise<str
     }
 }
 
-// ===================== Session helpers =====================
-
-function decodeJwtPayload(token: string): Record<string, any> | null {
+// ===================== Récupérer l'utilisateur depuis le backend =====================
+export async function fetchUserFromBackend(): Promise<AuthUser | null> {
     try {
-        const [, payload] = token.split('.')
-        const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-        return JSON.parse(json)
-    } catch {
+        console.log('🔍 Récupération de l\'utilisateur depuis /verify...')
+        
+        const response = await fetch(`${API_URL}/verify`, {
+            credentials: 'include',  // ✅ Envoie le cookie automatiquement
+        })
+        
+        if (!response.ok) {
+            console.error('❌ /verify a retourné:', response.status)
+            return null
+        }
+        
+        const data = await response.json()
+        console.log('📝 Données utilisateur:', data)
+        
+        const user: AuthUser = {
+            id: data.sub,
+            email: data.email,
+            role: data.role || 'clinician',
+            name: data.email?.split('@')[0] ?? 'Docteur',
+        }
+        
+        localStorage.setItem(USER_KEY, JSON.stringify(user))
+        console.log('✅ Utilisateur sauvegardé:', user)
+        return user
+    } catch (error) {
+        console.error('❌ Erreur récupération utilisateur:', error)
         return null
     }
 }
 
-export function saveSession(accessToken: string): AuthUser | null {
+// ===================== Session helpers =====================
+
+export function saveSession(): AuthUser | null {
     console.log('💾 === saveSession ===')
-    console.log('🔑 Token (premier 30 chars):', accessToken?.substring(0, 30) + '...')
-    
-    if (!accessToken) {
-        console.error('❌ Aucun token à sauvegarder')
-        return null
-    }
-    
-    // ✅ Sauvegarder le token dans localStorage
-    localStorage.setItem(TOKEN_KEY, accessToken)
-    
-    const payload = decodeJwtPayload(accessToken)
-    if (payload) {
-        console.log('📦 Payload décodé:', payload)
-        const user: AuthUser = {
-            id: payload.sub,
-            email: payload.email,
-            role: payload.role || 'clinician',
-            name: payload.name || (payload.email?.split('@')[0] ?? 'Docteur'),
-        }
-        localStorage.setItem(USER_KEY, JSON.stringify(user))
-        console.log('✅ Utilisateur sauvegardé:', user)
-        return user
-    }
-    
-    console.error('❌ Impossible de décoder le token')
+    // ✅ Le token est dans le cookie, on récupère juste l'utilisateur
     return getUser()
 }
 
@@ -379,13 +371,9 @@ export async function logout(): Promise<void> {
 }
 
 export function getToken(): string | null {
-    // ✅ Récupérer le token depuis localStorage
-    const token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem('token')
-    if (token) {
-        console.log('🔑 Token trouvé:', token.substring(0, 30) + '...')
-        return token
-    }
-    console.warn('⚠️ Aucun token trouvé')
+    // ✅ Le token est dans le cookie HttpOnly, on ne peut pas le lire
+    // On retourne null car on n'utilise plus le token dans le frontend
+    console.log('ℹ️ Le token est dans le cookie HttpOnly - pas accessible en JS')
     return null
 }
 
@@ -396,21 +384,12 @@ export function getUser(): AuthUser | null {
 }
 
 export function isAuthenticated(): boolean {
-    return !!getUser() && !!getToken()
+    return !!getUser()
 }
 
 export async function verifySession(): Promise<boolean> {
-    const token = getToken()
-    if (!token) {
-        localStorage.removeItem(USER_KEY)
-        return false
-    }
-
     try {
         const response = await fetch(`${API_URL}/verify`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
             credentials: 'include',
         })
         if (!response.ok) {
@@ -418,6 +397,15 @@ export async function verifySession(): Promise<boolean> {
             localStorage.removeItem(TOKEN_KEY)
             return false
         }
+        // ✅ Mettre à jour l'utilisateur si nécessaire
+        const data = await response.json()
+        const user: AuthUser = {
+            id: data.sub,
+            email: data.email,
+            role: data.role || 'clinician',
+            name: data.email?.split('@')[0] ?? 'Docteur',
+        }
+        localStorage.setItem(USER_KEY, JSON.stringify(user))
         return true
     } catch {
         return false

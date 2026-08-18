@@ -9,8 +9,8 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { ingestionApi } from '@/lib/ingestion_service_api'
-import { getToken } from '@/lib/auth'
-import type { User, Patient } from '@/types'
+import { getUser, verifySession , AuthUser } from '@/lib/auth'
+import type { Patient } from '@/types'
 
 type TestType = 
     | 'cookie_theft' 
@@ -226,7 +226,7 @@ const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
 export default function RecordingPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const [user, setUser] = useState<User | null>(null)
+    const [user, setUser] = useState<AuthUser | null>(null)
     const [patient, setPatient] = useState<Patient | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [isRecording, setIsRecording] = useState(false)
@@ -262,35 +262,45 @@ export default function RecordingPage() {
     const testConfig = testConfigs[testType]
 
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
+        const loadData = async () => {
+            try {
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+                setUser(userData as AuthUser)
+
+                const patientId = searchParams?.get('patient')
+                const testId = searchParams?.get('test') as TestType || 'cookie_theft'
+
+                if (patientId) {
+                    await loadPatient(patientId)
+                }
+
+                if (testId && testConfigs[testId]) {
+                    setTestType(testId)
+                }
+
+                setIsLoading(false)
+            } catch (error) {
+                console.error('❌ Erreur de chargement:', error)
+                router.push('/')
+            }
+
+            return () => {
+                cleanupResources()
+            }
         }
 
-        const userData = localStorage.getItem('user')
-        if (!userData) {
-            router.push('/')
-            return
-        }
-        setUser(JSON.parse(userData))
-
-        const patientId = searchParams?.get('patient')
-        const testId = searchParams?.get('test') as TestType || 'cookie_theft'
-
-        if (patientId) {
-            loadPatient(patientId)
-        }
-
-        if (testId && testConfigs[testId]) {
-            setTestType(testId)
-        }
-
-        setIsLoading(false)
-
-        return () => {
-            cleanupResources()
-        }
+        loadData()
     }, [router, searchParams])
 
     const loadPatient = async (patientId: string) => {
@@ -697,7 +707,7 @@ export default function RecordingPage() {
 
     return (
         <>
-            <Header user={user} />
+            
             <Navbar active="tests" />
             <main className="max-w-7xl mx-auto px-4 py-4">
                 

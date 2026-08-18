@@ -11,7 +11,7 @@ import SearchBar from '@/components/SearchBar'
 import EthicsBanner from '@/components/EthicsBanner'
 import PatientForm from '@/components/PatientForm'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { getUser, verifySession } from '@/lib/auth'
 import type { Patient, User, PatientFormData } from '@/types'
 
 export default function PatientsPage() {
@@ -22,19 +22,41 @@ export default function PatientsPage() {
     const [user, setUser] = useState<User | null>(null)
     const [isFormOpen, setIsFormOpen] = useState(false)
 
+    // ✅ Vérifier l'authentification via le cookie
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
+        const loadData = async () => {
+            try {
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
+                await loadPatients()
+            } catch (error) {
+                console.error('❌ Erreur:', error)
+                router.push('/')
+            }
         }
 
-        const userData = localStorage.getItem('user')
-        if (userData) {
-            setUser(JSON.parse(userData))
-        }
-
-        loadPatients()
+        loadData()
     }, [router])
 
     const loadPatients = async () => {
@@ -100,7 +122,6 @@ export default function PatientsPage() {
         p.dmiId?.includes(searchTerm)
     )
 
-    // ✅ UPDATED: Navigate to patient detail page instead of tests
     const handleSelectPatient = (patientId: string) => {
         localStorage.setItem('selectedPatient', patientId)
         router.push(`/patient/${patientId}`)

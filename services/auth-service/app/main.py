@@ -25,17 +25,29 @@ app = FastAPI(title="Auth Service")
 
 # ===================== CORS =====================
 
+# ✅ Forcer les origines pour le développement
 _allowed_origins = [
-    origin.strip()
-    for origin in os.environ.get("ALLOWED_ORIGINS", "").split(",")
-    if origin.strip()
+    "http://localhost:3000",
+    "http://localhost:3001", 
+    "http://127.0.0.1:3000",
 ]
+
+# ✅ Ajouter depuis .env si présent
+env_origins = os.environ.get("ALLOWED_ORIGINS", "")
+if env_origins:
+    _allowed_origins.extend([origin.strip() for origin in env_origins.split(",") if origin.strip()])
+
+_allowed_origins = list(set(_allowed_origins))
+
+print(f"🔓 CORS allowed origins: {_allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "PUT", "PATCH"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_origins=_allowed_origins,  # ← Utiliser la liste complète
+    allow_credentials=True,          # ← IMPORTANT pour les cookies
+    allow_methods=["*"],             # ← Permettre toutes les méthodes
+    allow_headers=["*"],             # ← Permettre tous les headers
+    expose_headers=["*"],
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -261,7 +273,7 @@ def confirm_2fa(
         key="ehealth_auth_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite="lax",
         max_age=auth.JWT_EXPIRE_MINUTES * 60,
         path="/",
