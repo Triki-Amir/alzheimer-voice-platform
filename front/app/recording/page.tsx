@@ -4,7 +4,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
@@ -428,7 +427,7 @@ export default function RecordingPage() {
         animationFrameRef.current = requestAnimationFrame(analyzeAudio)
     }
 
-    // ✅ Upload with WAV conversion
+    // ✅ Upload with WAV conversion (sans polling)
     const uploadToIngestion = async (blob: Blob) => {
         if (!blob || !patient) return
 
@@ -460,9 +459,8 @@ export default function RecordingPage() {
 
             if (result.success && result.data) {
                 setSessionId(result.data.session_id)
-                setUploadStatus(`✅ Session créée: ${result.data.session_id.slice(0, 12)}...`)
-                
-                pollSessionStatus(result.data.session_id)
+                // ✅ Polling désactivé - afficher simplement la session créée
+                setUploadStatus(`✅ Session créée avec succès ! (ID: ${result.data.session_id.slice(0, 12)}...)`)
             } else {
                 setUploadStatus(`❌ Erreur: ${result.error || 'Échec de l\'upload'}`)
             }
@@ -472,36 +470,6 @@ export default function RecordingPage() {
         } finally {
             setIsUploading(false)
         }
-    }
-
-    // ✅ Poll session status
-    const pollSessionStatus = async (sessionId: string) => {
-        let attempts = 0
-        const maxAttempts = 30
-        const interval = 2000
-
-        const poll = setInterval(async () => {
-            attempts++
-            const result = await ingestionApi.getSessionStatus(sessionId)
-            
-            if (result.success && result.data) {
-                const status = result.data.status
-                setUploadStatus(`📊 Statut: ${status} (${attempts}/${maxAttempts})`)
-                
-                if (status === 'completed') {
-                    clearInterval(poll)
-                    setUploadStatus('✅ Session terminée avec succès!')
-                } else if (status === 'failed') {
-                    clearInterval(poll)
-                    setUploadStatus('❌ La session a échoué')
-                }
-            }
-
-            if (attempts >= maxAttempts) {
-                clearInterval(poll)
-                setUploadStatus('⏰ Délai d\'attente dépassé')
-            }
-        }, interval)
     }
 
     const startRecording = async () => {
@@ -707,7 +675,6 @@ export default function RecordingPage() {
 
     return (
         <>
-            
             <Navbar active="tests" />
             <main className="max-w-7xl mx-auto px-4 py-4">
                 
