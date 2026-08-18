@@ -1,7 +1,7 @@
-#!/bin/sh
+﻿#!/bin/sh
 set -e
 
-mc alias set local https://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" --insecure
+mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" --insecure
 
 mc mb -p local/raw-audio
 mc mb -p local/patient-audio

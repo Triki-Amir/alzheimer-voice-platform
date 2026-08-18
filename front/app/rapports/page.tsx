@@ -61,14 +61,26 @@ export default function RapportsPage() {
         setIsLoading(true)
         const result = await patientsApi.getAll()
         if (result.success && result.data) {
-            setPatients(result.data)
+            const normalizedPatients: Patient[] = result.data.map((patient) => {
+                const normalizedGender: Patient['gender'] =
+                    patient.gender === 'Homme' || patient.gender === 'Femme'
+                        ? patient.gender
+                        : undefined
+
+                return {
+                    ...patient,
+                    id: String(patient.id ?? ''),
+                    gender: normalizedGender
+                }
+            })
+            setPatients(normalizedPatients)
             // Transformer les patients en rapports (simulé)
-            const reportsData: ReportSummary[] = result.data.map((p: Patient) => ({
-                patientId: p.id,
-                patientName: p.name,
-                patientInitials: p.initials,
-                patientColor: p.color,
-                date: p.lastSession || new Date().toLocaleDateString('fr-FR'),
+            const reportsData: ReportSummary[] = normalizedPatients.map((patient) => ({
+                patientId: String(patient.id ?? ''),
+                patientName: patient.name,
+                patientInitials: patient.initials,
+                patientColor: patient.color,
+                date: patient.lastSession || new Date().toLocaleDateString('fr-FR'),
                 diagnosis: getRandomDiagnosis(),
                 confidence: Math.round((0.7 + Math.random() * 0.25) * 100) / 100,
                 testsCompleted: Math.floor(Math.random() * 8),

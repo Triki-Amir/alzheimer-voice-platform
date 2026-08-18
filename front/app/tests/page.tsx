@@ -42,11 +42,20 @@ export default function TestsPage() {
         setIsLoading(true)
         const result = await patientsApi.getAll()
         if (result.success && result.data) {
-            setPatients(result.data)
+            const normalizedPatients: Patient[] = result.data.map((patient) => ({
+                ...patient,
+                id: String(patient.id),
+                gender:
+                    patient.gender === 'Homme' || patient.gender === 'Femme'
+                        ? patient.gender
+                        : undefined,
+            }))
+
+            setPatients(normalizedPatients)
             // Vérifier si un patient était sélectionné
             const savedPatientId = localStorage.getItem('selectedPatient')
             if (savedPatientId) {
-                const patient = result.data.find(p => p.id === savedPatientId)
+                const patient = normalizedPatients.find(p => p.id === savedPatientId)
                 if (patient) {
                     setSelectedPatient(patient)
                 }
@@ -80,12 +89,21 @@ export default function TestsPage() {
         }
 
         const result = await patientsApi.create(newPatient)
-        
+
         if (result.success && result.data) {
-            setPatients([result.data, ...patients])
-            setSelectedPatient(result.data)
-            localStorage.setItem('selectedPatient', result.data.id)
-            alert(`✅ Patient ${result.data.name} ajouté avec succès !`)
+            const createdPatient: Patient = {
+                ...result.data,
+                id: String(result.data.id),
+                gender:
+                    result.data.gender === 'Homme' || result.data.gender === 'Femme'
+                        ? result.data.gender
+                        : undefined,
+            }
+
+            setPatients([createdPatient, ...patients])
+            setSelectedPatient(createdPatient)
+            localStorage.setItem('selectedPatient', createdPatient.id)
+            alert(`✅ Patient ${createdPatient.name} ajouté avec succès !`)
             setIsFormOpen(false)
         } else {
             alert(`❌ Erreur: ${result.error || 'Impossible d\'ajouter le patient'}`)
