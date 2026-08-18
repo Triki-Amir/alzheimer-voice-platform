@@ -119,13 +119,9 @@ export async function registerDoctor(
 }
 
 // ===================== Enrolement vocal (post-2FA) =====================
-export async function enrollDoctorVoice(accessToken: string, audioBlob: Blob, filename: string): Promise<void> {
+export async function enrollDoctorVoice(audioBlob: Blob, filename: string): Promise<void> {
     console.log('🎵 Audio:', filename, audioBlob.size, 'bytes')
     console.log('📍 URL voix:', `${API_URL}/doctors/voice-enroll`)
-    
-    if (!accessToken) {
-        throw new AuthError('Token manquant - Veuillez vous reconnecter', 401)
-    }
 
     const formData = new FormData()
     formData.append('audio', audioBlob, filename)
@@ -147,7 +143,7 @@ export async function enrollDoctorVoice(accessToken: string, audioBlob: Blob, fi
         if (!response.ok) {
             throw new AuthError(await parseErrorDetail(response), response.status)
         }
-        
+
         console.log('✅ Voix enregistrée!')
     } catch (error) {
         console.error('❌ Erreur voix:', error)
@@ -259,7 +255,7 @@ export async function verify2FA(preAuthToken: string, code: string): Promise<voi
         credentials: 'include',
         body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
     })
-DFVRGB THNYJ?UK.IIYTGR5BFE4D3ZSA2Q  1<    if (!response.ok) {
+    if (!response.ok) {
         throw new AuthError(await parseErrorDetail(response), response.status)
     }
     // Cookie is set by the backend — nothing to store
@@ -332,5 +328,25 @@ export async function verifySession(): Promise<boolean> {
         return true
     } catch {
         return false
+    }
+}
+export async function refreshSession(): Promise<AuthUser | null> {
+    try {
+        const response = await fetch(`${API_URL}/verify`, {
+            credentials: 'include',
+        })
+        if (!response.ok) return null
+
+        const payload = await response.json()
+        const user: AuthUser = {
+            id: payload.sub,
+            email: payload.email,
+            role: payload.role,
+            name: payload.email?.split('@')[0] ?? 'Docteur',
+        }
+        localStorage.setItem(USER_KEY, JSON.stringify(user))
+        return user
+    } catch {
+        return null
     }
 }

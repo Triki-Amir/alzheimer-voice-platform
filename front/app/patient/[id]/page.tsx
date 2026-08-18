@@ -7,7 +7,7 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { isAuthenticated, verifySession } from '@/lib/auth'
 import type { Patient, User } from '@/types'
 
 interface PatientPageProps {
@@ -26,8 +26,8 @@ export default function PatientPage({ params }: PatientPageProps) {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const token = getToken()
-                if (!token) {
+                const valid = await verifySession()
+                if (!valid) {
                     router.push('/')
                     return
                 }

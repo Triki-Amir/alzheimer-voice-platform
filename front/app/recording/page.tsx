@@ -9,7 +9,7 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { ingestionApi } from '@/lib/ingestion_service_api'
-import { getToken } from '@/lib/auth'
+import { isAuthenticated, verifySession } from '@/lib/auth'
 import type { User, Patient } from '@/types'
 
 type TestType = 
@@ -249,31 +249,34 @@ export default function RecordingPage() {
     const testConfig = testConfigs[testType]
 
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
+        const checkAuth = async () => {
+            const valid = await verifySession()
+            if (!valid) {
+                router.push('/')
+                return
+            }
+
+            const userData = localStorage.getItem('user')
+            if (!userData) {
+                router.push('/')
+                return
+            }
+            setUser(JSON.parse(userData))
+
+            const patientId = searchParams?.get('patient')
+            const testId = searchParams?.get('test') as TestType || 'cookie_theft'
+
+            if (patientId) {
+                loadPatient(patientId)
+            }
+
+            if (testId && testConfigs[testId]) {
+                setTestType(testId)
+            }
+
+            setIsLoading(false)
         }
-
-        const userData = localStorage.getItem('user')
-        if (!userData) {
-            router.push('/')
-            return
-        }
-        setUser(JSON.parse(userData))
-
-        const patientId = searchParams?.get('patient')
-        const testId = searchParams?.get('test') as TestType || 'cookie_theft'
-
-        if (patientId) {
-            loadPatient(patientId)
-        }
-
-        if (testId && testConfigs[testId]) {
-            setTestType(testId)
-        }
-
-        setIsLoading(false)
+        checkAuth()
 
         return () => {
             cleanupResources()

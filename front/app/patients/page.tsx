@@ -11,9 +11,9 @@ import SearchBar from '@/components/SearchBar'
 import EthicsBanner from '@/components/EthicsBanner'
 import PatientForm from '@/components/PatientForm'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { getToken, verifySession } from '@/lib/auth'
 import type { Patient, User, PatientFormData } from '@/types'
-
+import { isAuthenticated } from '@/lib/auth'
 export default function PatientsPage() {
     const router = useRouter()
     const [searchTerm, setSearchTerm] = useState('')
@@ -23,18 +23,21 @@ export default function PatientsPage() {
     const [isFormOpen, setIsFormOpen] = useState(false)
 
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
-        }
+        const checkAuth = async () => {
+            const valid = await verifySession()
+            if (!valid) {
+                router.push('/')
+                return
+            }
 
-        const userData = localStorage.getItem('user')
-        if (userData) {
-            setUser(JSON.parse(userData))
-        }
+            const userData = localStorage.getItem('user')
+            if (userData) {
+                setUser(JSON.parse(userData))
+            }
 
-        loadPatients()
+            loadPatients()
+        }
+        checkAuth()
     }, [router])
 
     const loadPatients = async () => {

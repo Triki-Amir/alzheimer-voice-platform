@@ -11,9 +11,8 @@ import SearchBar from '@/components/SearchBar'
 import EthicsBanner from '@/components/EthicsBanner'
 import PatientForm from '@/components/PatientForm'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
 import type { Patient, User, PatientFormData } from '@/types'
-
+import { verifySession } from '@/lib/auth'
 // ==================== TYPES ====================
 interface DashboardStats {
     totalPatients: number
@@ -156,18 +155,21 @@ export default function DashboardPage() {
 
     // Vérifier l'authentification et charger les patients
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
-        }
+        const checkAuth = async () => {
+            const valid = await verifySession()
+            if (!valid) {
+                router.push('/')
+                return
+            }
 
-        const userData = localStorage.getItem('user')
-        if (userData) {
-            setUser(JSON.parse(userData))
-        }
+            const userData = localStorage.getItem('user')
+            if (userData) {
+                setUser(JSON.parse(userData))
+            }
 
-        loadPatients()
+            loadPatients()
+        }
+        checkAuth()
     }, [router])
 
     const loadPatients = async () => {

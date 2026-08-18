@@ -11,7 +11,7 @@ import PatientForm from '@/components/PatientForm'
 import EthicsBanner from '@/components/EthicsBanner'
 import { mockTests } from '@/lib/data'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { isAuthenticated, verifySession } from '@/lib/auth'
 import type { User, Patient, Test, PatientFormData } from '@/types'
 
 export default function TestsPage() {
@@ -24,18 +24,21 @@ export default function TestsPage() {
 
     // Vérifier l'authentification et charger les données
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
-        }
+        const checkAuth = async () => {
+            const valid = await verifySession()
+            if (!valid) {
+                router.push('/')
+                return
+            }
 
-        const userData = localStorage.getItem('user')
-        if (userData) {
-            setUser(JSON.parse(userData))
-        }
+            const userData = localStorage.getItem('user')
+            if (userData) {
+                setUser(JSON.parse(userData))
+            }
 
-        loadPatients()
+            loadPatients()
+        }
+        checkAuth()
     }, [router])
 
     const loadPatients = async () => {

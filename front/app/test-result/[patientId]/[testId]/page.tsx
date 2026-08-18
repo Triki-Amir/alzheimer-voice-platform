@@ -9,7 +9,7 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { ingestionApi } from '@/lib/ingestion_service_api'
-import { getToken } from '@/lib/auth'
+import { isAuthenticated, verifySession } from '@/lib/auth'
 import type { User, Patient } from '@/types'
 
 interface TestResultPageProps {
@@ -58,8 +58,8 @@ export default function TestResultPage({ params }: TestResultPageProps) {
     useEffect(() => {
         const loadData = async () => {
             try {
-                const token = getToken()
-                if (!token) {
+                const valid = await verifySession()
+                if (!valid) {
                     router.push('/')
                     return
                 }

@@ -8,7 +8,7 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
+import { isAuthenticated, verifySession } from '@/lib/auth'
 import type { User, Patient } from '../../../types/index'
 
 interface RapportPageProps {
@@ -51,8 +51,8 @@ export default function RapportPage({ params }: RapportPageProps) {
 
     useEffect(() => {
         const loadData = async () => {
-            const token = getToken()
-            if (!token) {
+            const valid = await verifySession()
+            if (!valid) {
                 router.push('/')
                 return
             }

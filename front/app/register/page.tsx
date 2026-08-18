@@ -11,7 +11,7 @@ import {
     setup2FA,
     confirm2FA,
     enrollDoctorVoice,
-    saveSession,
+    refreshSession,
     AuthError,
 } from '@/lib/auth'
 import type { DoctorRegistrationData, PracticeType } from '@/types'
@@ -169,11 +169,11 @@ export default function RegisterPage() {
         setIsLoading(true)
         try {
             const filename = `${formData.firstName}_${formData.lastName}_${Date.now()}_reference.wav`
-            await enrollDoctorVoice(accessToken, voiceBlob, filename)
+            await enrollDoctorVoice(voiceBlob, filename)
 
-            // Session finale + profil "extra" (hôpital/pratique) en local,
+            // Session fiawait enrollDoctorVoice(voiceBlob, filename)nale + profil "extra" (hôpital/pratique) en local,
             // keyé par l'id du médecin extrait du token.
-            const user = saveSession(accessToken)
+            const user = await refreshSession()
             if (user) {
                 let hospitalValue = formData.hospital
                 if (formData.practiceType === 'cabinet') {
@@ -197,6 +197,7 @@ export default function RegisterPage() {
                 router.push('/dashboard')
             }, 1500)
         } catch (err) {
+            console.error('🔴 RAW ERROR:', err)
             setError(describeError(err))
         } finally {
             setIsLoading(false)

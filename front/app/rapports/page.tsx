@@ -8,9 +8,9 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-import { getToken } from '@/lib/auth'
-import type { User, Patient } from '@/types'
 
+import type { User, Patient } from '@/types'
+import { isAuthenticated, verifySession } from '@/lib/auth'
 // ==================== TYPES ====================
 interface ReportSummary {
     patientId: string
@@ -43,18 +43,21 @@ export default function RapportsPage() {
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
-        const token = getToken()
-        if (!token) {
-            router.push('/')
-            return
-        }
+        const checkAuth = async () => {
+            const valid = await verifySession()
+            if (!valid) {
+                router.push('/')
+                return
+            }
 
-        const userData = localStorage.getItem('user')
-        if (userData) {
-            setUser(JSON.parse(userData))
-        }
+            const userData = localStorage.getItem('user')
+            if (userData) {
+                setUser(JSON.parse(userData))
+            }
 
-        loadPatients()
+            loadPatients()
+        }
+        checkAuth()
     }, [router])
 
     const loadPatients = async () => {
