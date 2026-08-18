@@ -10,6 +10,7 @@ WORKDIR /app
 COPY shared/ /app/shared
 RUN pip install --no-cache-dir -e /app/shared
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu121
+COPY infra/ca/ca.crt /etc/ssl/certs/voiceapp-ca.crt
 COPY services/linguistic-feature-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

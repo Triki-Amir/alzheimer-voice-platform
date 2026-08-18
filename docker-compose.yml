@@ -145,7 +145,9 @@ services:
       dockerfile: services/acoustic-feature-service/Dockerfile
     container_name: voiceapp_acoustic_feature
     env_file: .env
-    command: celery -A worker.app worker -l info -Q acoustic_extraction --pool=solo -E
+    environment:
+      - RABBITMQ_PORT=5671
+    command: celery -A app.worker worker -l info -Q acoustic_extraction --pool=solo -E    
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -161,7 +163,7 @@ services:
     container_name: voiceapp_linguistic_feature
     env_file: .env
     environment:
-      - POS_MODEL_PATH=/models/xlmr-tunisian-pos-finnal
+      - POS_MODEL_PATH=/models/xlmr-tunisian-pos-final
     command: celery -A app.worker.app worker -l info -Q linguistic_extraction --pool=solo -E
     deploy:
       resources:
@@ -182,11 +184,17 @@ services:
     build:
       context: .
       dockerfile: services/feature-engineering-service/Dockerfile
+    container_name: voiceapp_feature_engineering
     env_file: .env
+    command: celery -A app.worker worker -l info -Q feature_engineering --pool=solo -E
     depends_on:
       rabbitmq:
         condition: service_healthy
-
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+  
   fusion-classification-service:
     build:
       context: .

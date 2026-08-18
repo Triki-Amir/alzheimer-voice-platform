@@ -1,17 +1,17 @@
 # Local development convenience ONLY.
 #
-# docker-compose automatically merges docker-compose.override.yml on top of
-# docker-compose.yml. Copy this file to docker-compose.override.yml (which
-# should stay gitignored) when you're developing locally and want direct
-# access to Postgres/RabbitMQ/MinIO/auth-service without going through nginx.
+# docker compose automatically merges docker-compose.override.yml on top of
+# docker-compose.yml. Copy this file to docker-compose.override.yml on each
+# developer machine when you need direct access to containers from the host.
 #
-# NEVER apply this file, or anything like it, on a shared/staging/prod host.
-# Publishing these ports there is exactly the exposure the main
-# docker-compose.yml was just changed to avoid.
+# Safe for both cases:
+# - SSH machine: ports bind to 127.0.0.1, so the services are reachable only
+#   from the host itself and not from the network.
+# - Local laptops: same localhost binds work for pgAdmin, curl, and scripts.
 #
 # Usage:
 #   cp docker-compose.override.example.yml docker-compose.override.yml
-#   docker compose up
+#   docker compose up -d
 
 services:
   postgres:
@@ -22,7 +22,7 @@ services:
     ports:
       - "127.0.0.1:15672:15672" # management UI
       # AMQP itself (5672) is rarely needed directly in dev; add if you need it:
-      # - "127.0.0.1:5672:5672"
+      # - "127.0.0.1:5671:5671"
 
   minio:
     ports:
@@ -36,3 +36,9 @@ services:
   ingestion-service:
     ports:
       - "127.0.0.1:8002:8000"
+
+  preprocessing-service:
+    environment:
+      - PYTHONPATH=/shared
+    volumes:
+      - ./shared:/shared:ro

@@ -1,5 +1,8 @@
 import os
+import ssl
 import uuid
+from pathlib import Path
+
 import psycopg2
 from celery import Celery
 from dotenv import load_dotenv
@@ -14,9 +17,25 @@ POSTGRES_USER = os.getenv("POSTGRES_USER", "voiceapp")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "voiceapp123")
 
 RABBITMQ_HOST = "localhost" if os.getenv("RABBITMQ_HOST") == "rabbitmq" else os.getenv("RABBITMQ_HOST", "localhost")
-RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
+RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5671"))
 RABBITMQ_USER = os.getenv("RABBITMQ_DEFAULT_USER", "voiceapp")
 RABBITMQ_PASS = os.getenv("RABBITMQ_DEFAULT_PASS", "voiceapp123")
+RABBITMQ_USE_TLS = os.getenv("RABBITMQ_USE_TLS", "true").lower() == "true"
+
+
+def resolve_ca_cert_path() -> str:
+    env_path = os.getenv("CA_CERT_PATH")
+    if env_path and Path(env_path).expanduser().exists():
+        return env_path
+
+    repo_ca_path = Path(__file__).resolve().parent / "infra" / "ca" / "ca.crt"
+    if repo_ca_path.exists():
+        return str(repo_ca_path)
+
+    return "/etc/ssl/certs/voiceapp-ca.crt"
+
+
+CA_CERT_PATH = resolve_ca_cert_path()
 
 DOCTOR_ID = "44444444-4444-4444-4444-444444444444"  # Unique UUID for the doctor
 PATIENT_ID = str(uuid.uuid4())
@@ -87,6 +106,11 @@ def main():
     # 2. Connect to Celery / RabbitMQ
     broker_url = f"pyamqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}//"
     app = Celery("test_publisher", broker=broker_url)
+    if RABBITMQ_USE_TLS:
+        app.conf.broker_use_ssl = {
+            "ca_certs": CA_CERT_PATH,
+            "cert_reqs": ssl.CERT_REQUIRED,
+        }
 
     payload = {
         "session_id": SESSION_ID,
@@ -109,6 +133,7 @@ def main():
     print("\n🔍 You can now monitor task progression across workers using docker logs:")
     print("   • Preprocessing : docker logs -f <preprocessing_container_name>")
     print("   • STT Service   : docker logs -f <stt_container_name>")
+    print("   • Acoustic      : docker logs -f <acoustic_container_name>")
     print("   • Linguistic    : docker logs -f <linguistic_container_name>")
 
 
