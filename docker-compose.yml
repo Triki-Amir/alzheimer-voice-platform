@@ -16,17 +16,7 @@ services:
     build:
       context: .
       dockerfile: infra/rabbitmq/Dockerfile
-    environment:
-      ENVIRONMENT: ${ENVIRONMENT:-development}
-      RABBITMQ_USE_TLS: ${RABBITMQ_USE_TLS:-false}
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-voiceapp}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-changeme_strong_password}
-    ports:
-      - "127.0.0.1:5672:5672"
-      - "127.0.0.1:5671:5671"
-      - "127.0.0.1:15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+    env_file: .env
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -34,20 +24,19 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
-    platform: linux/amd64
-    container_name: alzheimer-voice-platform-minio-1
-    command: server /data --console-address ":9001"
+    build:
+      context: .
+      dockerfile: infra/minio/Dockerfile
     env_file: .env
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
-    ports:
-      - "9001:9001"
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      # -k: healthcheck runs against "localhost", not the "minio" CN the
+      # cert was issued for, so hostname verification is skipped here —
+      # this is an internal liveness probe, not the security boundary.
+      test: ["CMD", "curl", "-kf", "https://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -85,6 +74,7 @@ services:
     ports:
       - "8000:8000"
 
+
   ingestion-service:
     build:
       context: .
@@ -97,8 +87,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    ports:
-      - "8001:8000"
+
 
   quality-check-service:
     build:
@@ -115,7 +104,7 @@ services:
       dockerfile: services/preprocessing-service/Dockerfile
     env_file: .env
     environment:
-      HF_TOKEN: ${HF_TOKEN}
+      - HF_TOKEN=${HF_TOKEN}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -130,9 +119,9 @@ services:
       dockerfile: services/stt-service/Dockerfile
     env_file: .env
     environment:
-      HF_TOKEN: ${HF_TOKEN}
-      CUDA_VISIBLE_DEVICES: 0
-      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+      - HF_TOKEN=${HF_TOKEN}
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     command: celery -A app.worker worker -l info -Q stt_transcription --pool=solo -E
     deploy:
       resources:
@@ -149,13 +138,16 @@ services:
     volumes:
       - stt_models:/root/.cache/huggingface
 
+  # --- ACOUSTIC FEATURE EXTRACTION SERVICE ---
   acoustic-feature-service:
     build:
       context: .
       dockerfile: services/acoustic-feature-service/Dockerfile
     container_name: voiceapp_acoustic_feature
     env_file: .env
-    command: celery -A worker.app worker -l info -Q acoustic_extraction --pool=solo -E
+    environment:
+      - RABBITMQ_PORT=5671
+    command: celery -A app.worker worker -l info -Q acoustic_extraction --pool=solo -E    
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -171,7 +163,7 @@ services:
     container_name: voiceapp_linguistic_feature
     env_file: .env
     environment:
-      POS_MODEL_PATH: /models/xlmr-tunisian-pos-finnal
+      - POS_MODEL_PATH=/models/xlmr-tunisian-pos-final
     command: celery -A app.worker.app worker -l info -Q linguistic_extraction --pool=solo -E
     deploy:
       resources:
@@ -192,11 +184,17 @@ services:
     build:
       context: .
       dockerfile: services/feature-engineering-service/Dockerfile
+    container_name: voiceapp_feature_engineering
     env_file: .env
+    command: celery -A app.worker worker -l info -Q feature_engineering --pool=solo -E
     depends_on:
       rabbitmq:
         condition: service_healthy
-
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+  
   fusion-classification-service:
     build:
       context: .
@@ -216,15 +214,15 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-
+# --- LOCAL LLM INFERENCE ENGINE ---
   vllm-server:
     image: vllm/vllm-openai:latest
     container_name: voiceapp_vllm
     runtime: nvidia
     env_file: .env
     environment:
-      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN}
-      CUDA_VISIBLE_DEVICES: 0
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+      - CUDA_VISIBLE_DEVICES=0
     command: >
       --model Qwen/Qwen2.5-32B-Instruct-AWQ
       --quantization awq
@@ -254,9 +252,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: https://localhost
-      NEXT_PUBLIC_WS_URL: wss://localhost
-      WATCHPACK_POLLING: true
+      - NEXT_PUBLIC_API_URL=https://localhost
+      - NEXT_PUBLIC_WS_URL=wss://localhost
+      - WATCHPACK_POLLING=true
     volumes:
       - ./front:/app
       - /app/node_modules
@@ -268,7 +266,6 @@ services:
 volumes:
   pg_data:
   minio_data:
-  rabbitmq_data:
   diarization_models:
   stt_models:
   llm_models:

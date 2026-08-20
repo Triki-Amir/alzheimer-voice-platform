@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 app = make_celery_app("preprocessing_service", Queues.PREPROCESSING)
 
+STT_QUEUE = getattr(Queues, "STT_TRANSCRIPTION", "stt_transcription")
+ACOUSTIC_QUEUE = getattr(Queues, "ACOUSTIC_EXTRACTION", "acoustic_extraction")
+
 
 @app.task(name="preprocessing_service.process", bind=True, max_retries=3)
 def process(self, message: dict):
@@ -80,7 +83,7 @@ def process(self, message: dict):
             labeled_segments_object_name = f"{session_id}/labeled_segments.json"
             minio.fput_object("patient-audio", labeled_segments_object_name, labeled_segments_local)
             logger.info("  ├─ 💾 [Debug] Saved labeled_segments.json to MinIO")
-            
+
             # Mask doctor audio in place -- keeps ORIGINAL timeline intact,
             # no timestamp remapping needed anywhere downstream
             t_sub = time.perf_counter()
@@ -134,9 +137,8 @@ def process(self, message: dict):
             minio.fput_object("patient-audio", metrics_object_name, metrics_local)
 
         # NOTE: "labeled_segments" (doctor+patient) and "sentence_boundaries"
-        # are threaded into metadata here so STT and linguistic-feature
-        # services can consume them downstream -- this is the data that was
-        # previously getting silently dropped between services.
+        # are threaded into metadata here so STT, linguistic-feature, and
+        # acoustic-feature services can all consume them downstream.
         msg.metadata.update({
             "cleaned_audio_path": cleaned_object_name,
             "masked_audio_path": masked_object_name,
@@ -146,8 +148,9 @@ def process(self, message: dict):
             "preprocessing_metrics": consolidated_metrics,
         })
 
-        # Trigger STT Service Task
         patient_id = msg.metadata.get("patient_id")
+
+        # Trigger STT Service Task
         stt_payload = {
             "session_id": session_id,
             "patient_id": patient_id,
@@ -158,12 +161,31 @@ def process(self, message: dict):
         app.send_task(
             "stt_service.process",
             kwargs={"message": stt_payload},
-            queue=getattr(Queues, "STT_TRANSCRIPTION", "stt_transcription")
+            queue=STT_QUEUE
+        )
+
+        # Trigger Acoustic Feature Extraction Task -- runs in parallel with
+        # STT, it doesn't need a transcript. Uses cleaned_audio_path
+        # (unmuted) + labeled_segments so the acoustic worker can build its
+        # own patient-only signal, rather than masked_full.wav (which is
+        # tuned for VAD/pause timing, not acoustic/voice-quality features).
+        acoustic_payload = {
+            "session_id": session_id,
+            "patient_id": patient_id,
+            "metadata": msg.metadata
+        }
+
+        app.send_task(
+            "acoustic_feature_service.process",
+            kwargs={"message": acoustic_payload},
+            queue=ACOUSTIC_QUEUE
         )
 
         total_duration = time.perf_counter() - t0
-        logger.info("✅ [SUCCESS] Preprocessing completed in %.2fs | Session: %s -> Sent to STT",
-                    total_duration, session_id)
+        logger.info(
+            "✅ [SUCCESS] Preprocessing completed in %.2fs | Session: %s -> Sent to STT + Acoustic",
+            total_duration, session_id,
+        )
 
         return {
             "status": "SUCCESS",
