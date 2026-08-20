@@ -1,38 +1,23 @@
-# Local development convenience ONLY.
-#
-# docker-compose automatically merges docker-compose.override.yml on top of
-# docker-compose.yml. Copy this file to docker-compose.override.yml (which
-# should stay gitignored) when you're developing locally and want direct
-# access to Postgres/RabbitMQ/MinIO/auth-service without going through nginx.
-#
-# NEVER apply this file, or anything like it, on a shared/staging/prod host.
-# Publishing these ports there is exactly the exposure the main
-# docker-compose.yml was just changed to avoid.
-#
-# Usage:
-#   cp docker-compose.override.example.yml docker-compose.override.yml
-#   docker compose up
+# docker-compose.override.yml
+# Ce fichier est automatiquement fusionné avec docker-compose.yml
+# Il est ignoré par Git (ajoutez-le dans .gitignore)
 
 services:
-  postgres:
-    ports:
-      - "127.0.0.1:5432:5432"   # bound to localhost only, not 0.0.0.0
-
   rabbitmq:
+    environment:
+      - RABBITMQ_USE_TLS=false
     ports:
-      - "127.0.0.1:15672:15672" # management UI
-      # AMQP itself (5672) is rarely needed directly in dev; add if you need it:
-      # - "127.0.0.1:5672:5672"
-
-  minio:
-    ports:
-      - "127.0.0.1:9001:9001"   # console
-      # - "127.0.0.1:9000:9000" # S3 API, add if a local script needs it
-
-  auth-service:
-    ports:
-      - "127.0.0.1:8001:8000"   # bypass nginx for quick curl/Postman testing
+      - "127.0.0.1:5672:5672"   # Port sans TLS
+      - "127.0.0.1:15672:15672" # Management UI
 
   ingestion-service:
-    ports:
-      - "127.0.0.1:8002:8000"
+    environment:
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USE_TLS=false
+    extra_hosts:
+      - "rabbitmq:192.168.100.42"  # Votre IP (optionnel)
+
+  auth-service:
+    environment:
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USE_TLS=false
