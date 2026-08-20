@@ -128,11 +128,284 @@ interface VoiceMetrics {
     silenceDuration: number
 }
 
+// ===================== QUALITY CHECK INTERFACES =====================
+
+interface PreprocessingQualityCheck {
+    passed: boolean
+    score: number
+    warnings: string[]
+    errors: string[]
+    details: {
+        duration: { value: number; status: 'good' | 'warning' | 'error'; message: string }
+        volume: { value: number; status: 'good' | 'warning' | 'error'; message: string }
+        noise: { value: number; status: 'good' | 'warning' | 'error'; message: string }
+        clarity: { value: number; status: 'good' | 'warning' | 'error'; message: string }
+        silenceRatio: { value: number; status: 'good' | 'warning' | 'error'; message: string }
+        twoSpeakers: { status: 'good' | 'warning' | 'error'; message: string }
+    }
+}
+
+// ===================== QUALITY CHECK FUNCTIONS =====================
+
+const checkPreprocessingQuality = (
+    metrics: VoiceMetrics, 
+    duration: number
+): PreprocessingQualityCheck => {
+    const errors: string[] = []
+    const warnings: string[] = []
+    
+    // 1. Vérifier la durée (le preprocessing attend > 3s)
+    let durationStatus: 'good' | 'warning' | 'error'
+    let durationMessage: string
+    if (duration < 3) {
+        durationStatus = 'error'
+        durationMessage = `⏱️ Audio trop court (${duration}s). Minimum 3 secondes.`
+        errors.push('Audio trop court')
+    } else if (duration < 5) {
+        durationStatus = 'warning'
+        durationMessage = `⏱️ Audio court (${duration}s). Idéal > 5 secondes.`
+        warnings.push('Audio court')
+    } else if (duration < 10) {
+        durationStatus = 'warning'
+        durationMessage = `⏱️ Durée acceptable (${duration}s). Idéal > 10 secondes.`
+        warnings.push('Durée acceptable mais pas optimale')
+    } else {
+        durationStatus = 'good'
+        durationMessage = `✅ Durée correcte (${duration}s)`
+    }
+
+    // 2. Vérifier le volume (le preprocessing attend > 10%)
+    const volumeValue = metrics.volume.percentage
+    let volumeStatus: 'good' | 'warning' | 'error'
+    let volumeMessage: string
+    if (volumeValue < 2) {
+        volumeStatus = 'error'
+        volumeMessage = '🔇 Volume trop faible (inaudible)'
+        errors.push('Volume trop faible')
+    } else if (volumeValue < 5) {
+        volumeStatus = 'error'
+        volumeMessage = '🔇 Volume très faible'
+        errors.push('Volume très faible')
+    } else if (volumeValue < 10) {
+        volumeStatus = 'warning'
+        volumeMessage = '🔊 Volume faible, mais acceptable'
+        warnings.push('Volume faible')
+    } else if (volumeValue < 30) {
+        volumeStatus = 'good'
+        volumeMessage = '✅ Volume optimal'
+    } else {
+        volumeStatus = 'warning'
+        volumeMessage = '📢 Volume élevé (risque de saturation)'
+        warnings.push('Volume élevé')
+    }
+
+    // 3. Vérifier le bruit (le preprocessing attend < 30%)
+    const noiseValue = metrics.noise.percentage
+    let noiseStatus: 'good' | 'warning' | 'error'
+    let noiseMessage: string
+    if (noiseValue < 10) {
+        noiseStatus = 'good'
+        noiseMessage = '✅ Bruit de fond faible'
+    } else if (noiseValue < 25) {
+        noiseStatus = 'warning'
+        noiseMessage = '🔊 Bruit modéré, mais acceptable'
+        warnings.push('Bruit modéré')
+    } else if (noiseValue < 40) {
+        noiseStatus = 'warning'
+        noiseMessage = '⚠️ Bruit élevé'
+        warnings.push('Bruit élevé')
+    } else {
+        noiseStatus = 'error'
+        noiseMessage = '❌ Bruit excessif'
+        errors.push('Bruit excessif')
+    }
+
+    // 4. Vérifier la clarté (SNR)
+    const clarityValue = metrics.clarity.percentage
+    let clarityStatus: 'good' | 'warning' | 'error'
+    let clarityMessage: string
+    if (clarityValue > 30) {
+        clarityStatus = 'good'
+        clarityMessage = '✅ Excellente clarté'
+    } else if (clarityValue > 20) {
+        clarityStatus = 'good'
+        clarityMessage = '✅ Bonne clarté'
+    } else if (clarityValue > 15) {
+        clarityStatus = 'warning'
+        clarityMessage = '⚠️ Clarté acceptable'
+        warnings.push('Clarté moyenne')
+    } else {
+        clarityStatus = 'error'
+        clarityMessage = '❌ Mauvaise clarté'
+        errors.push('Mauvaise clarté')
+    }
+
+    // 5. Vérifier le ratio de silence
+    const silenceRatio = metrics.silenceDuration / (duration + 0.001)
+    let silenceStatus: 'good' | 'warning' | 'error'
+    let silenceMessage: string
+    if (silenceRatio < 0.15) {
+        silenceStatus = 'good'
+        silenceMessage = '✅ Peu de silence'
+    } else if (silenceRatio < 0.4) {
+        silenceStatus = 'warning'
+        silenceMessage = `⚠️ ${Math.round(silenceRatio * 100)}% de silence`
+        warnings.push('Silence important')
+    } else {
+        silenceStatus = 'error'
+        silenceMessage = `❌ ${Math.round(silenceRatio * 100)}% de silence (trop)`
+        errors.push('Trop de silence')
+    }
+
+    // 6. Vérifier la présence de deux locuteurs
+    const twoSpeakersStatus = metrics.isSilent ? 'error' : 'warning'
+    const twoSpeakersMessage = metrics.isSilent 
+        ? '❌ Aucune parole détectée' 
+        : '⚠️ Vérifiez que vous et le patient parlez (le preprocessing attend 2 locuteurs)'
+
+    // 7. Calculer le score global
+    let score = 100
+    score -= errors.length * 25
+    score -= warnings.length * 10
+    const finalScore = Math.max(0, Math.min(100, score))
+    const passed = finalScore >= 60 && errors.length === 0
+
+    return {
+        passed,
+        score: finalScore,
+        warnings,
+        errors,
+        details: {
+            duration: { value: duration, status: durationStatus, message: durationMessage },
+            volume: { value: volumeValue, status: volumeStatus, message: volumeMessage },
+            noise: { value: noiseValue, status: noiseStatus, message: noiseMessage },
+            clarity: { value: clarityValue, status: clarityStatus, message: clarityMessage },
+            silenceRatio: { value: silenceRatio, status: silenceStatus, message: silenceMessage },
+            twoSpeakers: { status: twoSpeakersStatus, message: twoSpeakersMessage }
+        }
+    }
+}
+
+// ===================== QUALITY RESULT DISPLAY =====================
+
+const QualityResultDisplay = ({ 
+    result, 
+    onAccept, 
+    onReject 
+}: { 
+    result: PreprocessingQualityCheck
+    onAccept: () => void
+    onReject: () => void
+}) => {
+    const getStatusColor = (status: 'good' | 'warning' | 'error') => {
+        switch (status) {
+            case 'good': return 'text-green-600 border-green-300 bg-green-50'
+            case 'warning': return 'text-amber-600 border-amber-300 bg-amber-50'
+            case 'error': return 'text-red-600 border-red-300 bg-red-50'
+        }
+    }
+
+    const getStatusIcon = (status: 'good' | 'warning' | 'error') => {
+        switch (status) {
+            case 'good': return '✅'
+            case 'warning': return '⚠️'
+            case 'error': return '❌'
+        }
+    }
+
+    const getScoreColor = (score: number) => {
+        if (score >= 80) return 'text-green-600'
+        if (score >= 60) return 'text-amber-600'
+        return 'text-red-600'
+    }
+
+    return (
+        <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg mb-4">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">🎯 Qualité pour le traitement</h3>
+                <div className="text-right">
+                    <div className={`text-3xl font-bold ${getScoreColor(result.score)}`}>
+                        {result.score}%
+                    </div>
+                    <div className="text-sm text-gray-500">Score global</div>
+                </div>
+            </div>
+
+            {result.errors.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-4">
+                    <p className="font-bold text-red-700">❌ Problèmes bloquants</p>
+                    <ul className="mt-1 space-y-1">
+                        {result.errors.map((err, i) => (
+                            <li key={i} className="text-sm text-red-600">• {err}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {result.warnings.length > 0 && (
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 mb-4">
+                    <p className="font-bold text-amber-700">⚠️ Avertissements</p>
+                    <ul className="mt-1 space-y-1">
+                        {result.warnings.map((warn, i) => (
+                            <li key={i} className="text-sm text-amber-600">• {warn}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                {Object.entries(result.details).map(([key, detail]) => (
+                    <div key={key} className={`p-3 rounded-xl border-2 ${getStatusColor(detail.status)}`}>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium capitalize">{key}</span>
+                            <span className={`text-sm font-bold ${
+                                detail.status === 'good' ? 'text-green-600' :
+                                detail.status === 'warning' ? 'text-amber-600' :
+                                'text-red-600'
+                            }`}>
+                                {getStatusIcon(detail.status)}
+                            </span>
+                        </div>
+                        
+                    </div>
+                ))}
+            </div>
+
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-4">
+                <p className="text-sm text-blue-700 font-medium">💡 Le preprocessing attend :</p>
+                <ul className="mt-1 text-xs text-blue-600 space-y-0.5">
+                    <li>• Durée {'>'} 3 secondes (idéal {'>'} 10s)</li>
+                    <li>• Volume {'>'} 10%</li>
+                    <li>• Bruit {'<'} 30%</li>
+                    <li>• Clarté {'>'} 15 dB</li>
+                    <li>• 2 locuteurs (médecin + patient)</li>
+                </ul>
+            </div>
+
+            <div className="flex gap-3">
+                <button
+                    onClick={onAccept}
+                    className={`flex-1 py-3 rounded-xl font-bold transition ${
+                        result.passed 
+                            ? 'bg-green-600 text-white hover:bg-green-700' 
+                            : 'bg-amber-600 text-white hover:bg-amber-700'
+                    }`}
+                >
+                    {result.passed ? '📤 Uploader' : '📤 Uploader quand même'}
+                </button>
+                <button
+                    onClick={onReject}
+                    className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition"
+                >
+                    🔄 Ré-enregistrer
+                </button>
+            </div>
+        </div>
+    )
+}
+
 // ===================== AUDIO CONVERSION UTILITIES =====================
 
-/**
- * Convert WebM blob to WAV format with better error handling
- */
 const convertToWav = async (webmBlob: Blob): Promise<Blob> => {
     return new Promise((resolve, reject) => {
         if (!webmBlob || webmBlob.size === 0) {
@@ -179,9 +452,6 @@ const convertToWav = async (webmBlob: Blob): Promise<Blob> => {
     })
 }
 
-/**
- * Convert AudioBuffer to WAV Blob
- */
 const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
     const numberOfChannels = audioBuffer.numberOfChannels
     const sampleRate = audioBuffer.sampleRate
@@ -241,6 +511,10 @@ export default function RecordingPage() {
     const [uploadStatus, setUploadStatus] = useState<string | null>(null)
     const [sessionId, setSessionId] = useState<string | null>(null)
 
+    // ✅ Quality check states
+    const [showQualityCheck, setShowQualityCheck] = useState(false)
+    const [qualityResult, setQualityResult] = useState<PreprocessingQualityCheck | null>(null)
+
     const [voiceMetrics, setVoiceMetrics] = useState<VoiceMetrics>({
         noise: { level: 'Faible', status: 'good', percentage: 12 },
         volume: { level: 'Bon', status: 'good', percentage: 78 },
@@ -263,7 +537,6 @@ export default function RecordingPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                // ✅ Vérifier l'authentification via le cookie
                 const isAuth = await verifySession()
                 if (!isAuth) {
                     router.push('/')
@@ -360,74 +633,189 @@ export default function RecordingPage() {
     }
 
     const analyzeAudio = () => {
-        if (!analyserRef.current) return
-
         const analyser = analyserRef.current
-        
+        if (!analyser) return
+
+        if (!streamRef.current) return
+
+        // ================================
+        // 1. GET REAL-TIME AUDIO DATA
+        // ================================
+
         const timeDataArray = new Uint8Array(analyser.fftSize)
         analyser.getByteTimeDomainData(timeDataArray)
-        const rms = calculateRMS(timeDataArray)
-        
-        const freqDataArray = new Uint8Array(analyser.frequencyBinCount)
-        analyser.getByteFrequencyData(freqDataArray)
-        
-        let noiseSum = 0
-        const noiseSamples = Math.min(20, freqDataArray.length)
-        for (let i = 0; i < noiseSamples; i++) {
-            noiseSum += freqDataArray[i] / 255
-        }
-        const noiseLevel = Math.min((noiseSum / noiseSamples) * 100, 100)
-        
-        const snr = Math.min(rms + 20, 100)
 
-        const VOLUME_SILENCE_THRESHOLD = 3
-        const VOLUME_LOW_THRESHOLD = 6
-        const VOLUME_GOOD_THRESHOLD = 15
-        const VOLUME_HIGH_THRESHOLD = 30
+        // ================================
+        // 2. CALCULATE RMS VOLUME
+        // ================================
 
-        const isSilent = rms < VOLUME_SILENCE_THRESHOLD
-        let silenceDuration = voiceMetrics.silenceDuration
-
-        if (isSilent) {
-            silenceDuration += 0.1
-        } else {
-            silenceDuration = 0
+        let sumSquares = 0
+        for (let i = 0; i < timeDataArray.length; i++) {
+            const normalized = (timeDataArray[i] - 128) / 128
+            sumSquares += normalized * normalized
         }
 
-        setVoiceMetrics({
-            noise: {
-                level: noiseLevel < 30 ? 'Faible' : noiseLevel < 60 ? 'Moyen' : 'Élevé',
-                status: noiseLevel < 30 ? 'good' : noiseLevel < 60 ? 'warning' : 'error',
-                percentage: Math.round(noiseLevel)
-            },
-            volume: {
-                level: rms > VOLUME_HIGH_THRESHOLD ? 'Élevé' 
-                     : rms > VOLUME_GOOD_THRESHOLD ? 'Bon' 
-                     : rms > VOLUME_LOW_THRESHOLD ? 'Faible' 
-                     : 'Très faible',
-                status: rms > VOLUME_GOOD_THRESHOLD ? 'good' 
-                      : rms > VOLUME_LOW_THRESHOLD ? 'warning' 
-                      : 'error',
-                percentage: Math.round(rms)
-            },
-            clarity: {
-                level: snr > 60 ? 'Excellente' : snr > 35 ? 'Bonne' : 'Moyenne',
-                status: snr > 50 ? 'good' : snr > 30 ? 'warning' : 'error',
-                percentage: Math.round(snr)
-            },
-            rhythm: {
-                level: rms > 15 ? 'Bon' : rms > 8 ? 'Moyen' : 'Irregulier',
-                status: rms > 15 ? 'good' : rms > 8 ? 'warning' : 'error',
-                percentage: Math.round(rms * 0.8 + 20)
-            },
-            isSilent,
-            silenceDuration: Math.round(silenceDuration)
+        const rms = Math.sqrt(sumSquares / timeDataArray.length)
+        const rmsPercentage = Math.min(rms * 100, 100)
+
+        // ================================
+        // 3. FREQUENCY DATA (pour le bruit)
+        // ================================
+
+        const frequencyData = new Uint8Array(analyser.frequencyBinCount)
+        analyser.getByteFrequencyData(frequencyData)
+
+        let totalFrequencyEnergy = 0
+        for (let i = 0; i < frequencyData.length; i++) {
+            totalFrequencyEnergy += frequencyData[i]
+        }
+
+        const averageFrequencyEnergy = totalFrequencyEnergy / frequencyData.length
+        const audioEnergyPercentage = Math.min((averageFrequencyEnergy / 255) * 100, 100)
+
+        // ================================
+        // 4. THRESHOLDS - ALIGNÉES AVEC LE PREPROCESSING
+        // ================================
+
+        const SILENCE_THRESHOLD = 2.0
+        const LOW_VOLUME_THRESHOLD = 5.0
+        const GOOD_VOLUME_THRESHOLD = 10.0
+        const HIGH_VOLUME_THRESHOLD = 30.0
+
+        const isSilent = rmsPercentage < SILENCE_THRESHOLD
+
+        // ================================
+        // 5. UPDATE REACT STATE
+        // ================================
+
+        setVoiceMetrics(prevMetrics => {
+            let newSilenceDuration = prevMetrics.silenceDuration
+            const frameDuration = 1 / 60
+
+            if (isSilent) {
+                newSilenceDuration += frameDuration
+            } else {
+                newSilenceDuration = 0
+            }
+
+            // Volume
+            let volumeLevel: string
+            let volumeStatus: 'good' | 'warning' | 'error'
+            let volumePercentage: number
+
+            if (rmsPercentage < SILENCE_THRESHOLD) {
+                volumeLevel = '🔇 Silence'
+                volumeStatus = 'error'
+                volumePercentage = 0
+            } else if (rmsPercentage < LOW_VOLUME_THRESHOLD) {
+                volumeLevel = 'Très faible'
+                volumeStatus = 'error'
+                volumePercentage = Math.round(rmsPercentage * 3)
+            } else if (rmsPercentage < GOOD_VOLUME_THRESHOLD) {
+                volumeLevel = 'Faible'
+                volumeStatus = 'warning'
+                volumePercentage = Math.round(rmsPercentage * 4)
+            } else if (rmsPercentage < HIGH_VOLUME_THRESHOLD) {
+                volumeLevel = 'Bon'
+                volumeStatus = 'good'
+                volumePercentage = Math.min(Math.round(rmsPercentage * 3), 100)
+            } else {
+                volumeLevel = 'Élevé'
+                volumeStatus = 'good'
+                volumePercentage = Math.min(Math.round(rmsPercentage * 2.5), 100)
+            }
+
+            // Noise
+            let noiseLevel: string
+            let noiseStatus: 'good' | 'warning' | 'error'
+            let noisePercentage: number
+
+            if (audioEnergyPercentage < 10) {
+                noiseLevel = 'Faible'
+                noiseStatus = 'good'
+                noisePercentage = Math.round(audioEnergyPercentage * 3)
+            } else if (audioEnergyPercentage < 25) {
+                noiseLevel = 'Moyen'
+                noiseStatus = 'warning'
+                noisePercentage = Math.round(audioEnergyPercentage * 2)
+            } else if (audioEnergyPercentage < 40) {
+                noiseLevel = 'Élevé'
+                noiseStatus = 'warning'
+                noisePercentage = Math.min(Math.round(audioEnergyPercentage * 1.5), 100)
+            } else {
+                noiseLevel = 'Excessif'
+                noiseStatus = 'error'
+                noisePercentage = Math.min(Math.round(audioEnergyPercentage * 1.2), 100)
+            }
+
+            // Clarity
+            let clarityLevel: string
+            let clarityStatus: 'good' | 'warning' | 'error'
+            let clarityPercentage: number
+
+            if (rmsPercentage > GOOD_VOLUME_THRESHOLD) {
+                clarityLevel = 'Excellente'
+                clarityStatus = 'good'
+                clarityPercentage = Math.min(Math.round(rmsPercentage * 3), 100)
+            } else if (rmsPercentage > LOW_VOLUME_THRESHOLD) {
+                clarityLevel = 'Bonne'
+                clarityStatus = 'warning'
+                clarityPercentage = Math.round(rmsPercentage * 2.5)
+            } else {
+                clarityLevel = 'Moyenne'
+                clarityStatus = 'error'
+                clarityPercentage = Math.round(rmsPercentage * 2)
+            }
+
+            // Rhythm
+            let rhythmLevel: string
+            let rhythmStatus: 'good' | 'warning' | 'error'
+            let rhythmPercentage: number
+
+            if (rmsPercentage > GOOD_VOLUME_THRESHOLD) {
+                rhythmLevel = 'Bon'
+                rhythmStatus = 'good'
+                rhythmPercentage = Math.min(Math.round(rmsPercentage * 3), 100)
+            } else if (rmsPercentage > LOW_VOLUME_THRESHOLD) {
+                rhythmLevel = 'Moyen'
+                rhythmStatus = 'warning'
+                rhythmPercentage = Math.round(rmsPercentage * 2.5)
+            } else {
+                rhythmLevel = 'Irrégulier'
+                rhythmStatus = 'error'
+                rhythmPercentage = Math.round(rmsPercentage * 2)
+            }
+
+            return {
+                noise: {
+                    level: noiseLevel,
+                    status: noiseStatus,
+                    percentage: noisePercentage
+                },
+                volume: {
+                    level: volumeLevel,
+                    status: volumeStatus,
+                    percentage: volumePercentage
+                },
+                clarity: {
+                    level: clarityLevel,
+                    status: clarityStatus,
+                    percentage: clarityPercentage
+                },
+                rhythm: {
+                    level: rhythmLevel,
+                    status: rhythmStatus,
+                    percentage: rhythmPercentage
+                },
+                isSilent,
+                silenceDuration: newSilenceDuration
+            }
         })
 
         animationFrameRef.current = requestAnimationFrame(analyzeAudio)
     }
 
-    // ✅ Upload with WAV conversion (sans polling)
+    // ✅ Upload with WAV conversion
     const uploadToIngestion = async (blob: Blob) => {
         if (!blob || !patient) return
 
@@ -435,7 +823,6 @@ export default function RecordingPage() {
         setUploadStatus('📤 Upload vers le service d\'ingestion...')
 
         try {
-            // ✅ Convertir en WAV
             setUploadStatus('🔄 Conversion en WAV...')
             const wavBlob = await convertToWav(blob)
             
@@ -448,7 +835,6 @@ export default function RecordingPage() {
 
             setUploadStatus('📤 Upload vers le service...')
 
-            // ✅ Upload WAV
             const result = await ingestionApi.uploadAudio(
                 patient.id,
                 wavBlob,
@@ -459,7 +845,6 @@ export default function RecordingPage() {
 
             if (result.success && result.data) {
                 setSessionId(result.data.session_id)
-                // ✅ Polling désactivé - afficher simplement la session créée
                 setUploadStatus(`✅ Session créée avec succès ! (ID: ${result.data.session_id.slice(0, 12)}...)`)
             } else {
                 setUploadStatus(`❌ Erreur: ${result.error || 'Échec de l\'upload'}`)
@@ -470,6 +855,20 @@ export default function RecordingPage() {
         } finally {
             setIsUploading(false)
         }
+    }
+
+    // ✅ Handle quality check result
+    const handleAcceptAudio = () => {
+        if (audioBlob) {
+            setShowQualityCheck(false)
+            uploadToIngestion(audioBlob)
+        }
+    }
+
+    const handleRejectAudio = () => {
+        setShowQualityCheck(false)
+        setQualityResult(null)
+        handleRetry()
     }
 
     const startRecording = async () => {
@@ -495,7 +894,6 @@ export default function RecordingPage() {
             analyserRef.current = analyser
             source.connect(analyser)
 
-            // ✅ Forcer audio/webm
             const mimeTypes = [
                 'audio/webm;codecs=opus',
                 'audio/webm',
@@ -545,7 +943,10 @@ export default function RecordingPage() {
                 setAudioUrl(url)
                 setIsComplete(true)
                 
-                uploadToIngestion(blob)
+                // ✅ Perform quality check BEFORE upload
+                const result = checkPreprocessingQuality(voiceMetrics, time)
+                setQualityResult(result)
+                setShowQualityCheck(true)
             }
 
             mediaRecorder.start(1000)
@@ -558,6 +959,8 @@ export default function RecordingPage() {
             setWords([])
             setUploadStatus(null)
             setSessionId(null)
+            setShowQualityCheck(false)
+            setQualityResult(null)
 
         } catch (error) {
             console.error('❌ Erreur microphone:', error)
@@ -608,6 +1011,8 @@ export default function RecordingPage() {
         setAudioUrl(null)
         setUploadStatus(null)
         setSessionId(null)
+        setShowQualityCheck(false)
+        setQualityResult(null)
         setVoiceMetrics({
             noise: { level: 'Faible', status: 'good', percentage: 12 },
             volume: { level: 'Bon', status: 'good', percentage: 78 },
@@ -673,6 +1078,7 @@ export default function RecordingPage() {
         )
     }
 
+   
     return (
         <>
             <Navbar active="tests" />
@@ -753,145 +1159,157 @@ export default function RecordingPage() {
                     </div>
                 </div>
 
-                {/* Image */}
-                <div className="w-full bg-white border-4 border-gray-200 rounded-2xl p-2 shadow-xl mb-4">
-                    {testConfig.imagePath ? (
-                        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100">
-                            <img
-                                src={testConfig.imagePath}
-                                alt={testConfig.title}
-                                className="object-contain w-full h-full"
-                                onError={(e) => {
-                                    const target = e.target as HTMLImageElement
-                                    target.style.display = 'none'
-                                }}
-                            />
-                        </div>
-                    ) : (
-                        <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center">
-                            <div className="text-center text-gray-400">
-                                <span className="text-8xl block mb-4">{testConfig.icon}</span>
-                                <p className="text-2xl font-semibold text-gray-600">{testConfig.title}</p>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Upload Status */}
-                {uploadStatus && (
-                    <div className={`mb-4 p-3 rounded-xl text-center ${
-                        uploadStatus.includes('✅') ? 'bg-green-100 text-green-700 border-2 border-green-300' :
-                        uploadStatus.includes('❌') ? 'bg-red-100 text-red-700 border-2 border-red-300' :
-                        uploadStatus.includes('⏰') ? 'bg-amber-100 text-amber-700 border-2 border-amber-300' :
-                        'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                    }`}>
-                        {uploadStatus}
-                        {sessionId && (
-                            <span className="block text-xs font-mono mt-1">
-                                Session: {sessionId}
-                            </span>
-                        )}
-                    </div>
+                {/* Quality Check Display */}
+                {showQualityCheck && qualityResult && (
+                    <QualityResultDisplay
+                        result={qualityResult}
+                        onAccept={handleAcceptAudio}
+                        onReject={handleRejectAudio}
+                    />
                 )}
 
-                {/* Boutons */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    {/* Timer + Contrôles */}
-                    <div className="md:col-span-1">
-                        <div className="bg-white border-4 border-gray-200 rounded-2xl p-4 shadow-xl h-full">
-                            <div className="text-center mb-3">
-                                <div className="text-4xl font-bold text-blue-600 font-mono">
-                                    {formatTime(time)}
+                {/* Rest of the content - hidden during quality check */}
+                {!showQualityCheck && (
+                    <>
+                        {/* Image */}
+                        <div className="w-full bg-white border-4 border-gray-200 rounded-2xl p-2 shadow-xl mb-4">
+                            {testConfig.imagePath ? (
+                                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100">
+                                    <img
+                                        src={testConfig.imagePath}
+                                        alt={testConfig.title}
+                                        className="object-contain w-full h-full"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement
+                                            target.style.display = 'none'
+                                        }}
+                                    />
                                 </div>
-                                <div className="text-xs text-gray-500">/ {formatTime(testConfig.duration)}</div>
-                            </div>
-
-                            {isComplete ? (
-                                <button onClick={handleRetry} className="w-full py-3 bg-amber-500 text-white text-lg font-bold rounded-xl hover:bg-amber-600 transition">
-                                    🔄 Recommencer
-                                </button>
-                            ) : !isRecording ? (
-                                <button onClick={startRecording} className="w-full py-3 bg-red-600 text-white text-xl font-bold rounded-xl hover:bg-red-700 transition shadow">
-                                    🔴 Démarrer
-                                </button>
                             ) : (
-                                <div className="space-y-2">
-                                    <div className="text-center">
-                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                                            🎙️ {isPaused ? 'Pause' : 'Enregistrement'}
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={togglePause} className="flex-1 py-2.5 bg-amber-500 text-white text-lg font-bold rounded-xl hover:bg-amber-600 transition">
-                                            {isPaused ? '▶️' : '⏸️'}
-                                        </button>
-                                        <button onClick={stopRecording} className="flex-1 py-2.5 bg-gray-600 text-white text-lg font-bold rounded-xl hover:bg-gray-700 transition">
-                                            ⏹️
-                                        </button>
+                                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center">
+                                    <div className="text-center text-gray-400">
+                                        <span className="text-8xl block mb-4">{testConfig.icon}</span>
+                                        <p className="text-2xl font-semibold text-gray-600">{testConfig.title}</p>
                                     </div>
                                 </div>
                             )}
                         </div>
-                    </div>
 
-                    {/* Consignes + Navigation */}
-                    <div className="md:col-span-3">
-                        <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 h-full flex flex-col justify-between">
-                            <div>
-                                <p className="text-xs font-medium text-blue-600">📋 Consignes</p>
-                                <p className="text-sm text-blue-800 mt-1">
-                                    {testConfig.instructions?.join(' • ') || 'Suivez les instructions'}
-                                </p>
+                        {/* Upload Status */}
+                        {uploadStatus && (
+                            <div className={`mb-4 p-3 rounded-xl text-center ${
+                                uploadStatus.includes('✅') ? 'bg-green-100 text-green-700 border-2 border-green-300' :
+                                uploadStatus.includes('❌') ? 'bg-red-100 text-red-700 border-2 border-red-300' :
+                                uploadStatus.includes('⏰') ? 'bg-amber-100 text-amber-700 border-2 border-amber-300' :
+                                'bg-blue-100 text-blue-700 border-2 border-blue-300'
+                            }`}>
+                                {uploadStatus}
+                                {sessionId && (
+                                    <span className="block text-xs font-mono mt-1">
+                                        Session: {sessionId}
+                                    </span>
+                                )}
                             </div>
-                            <div className="flex gap-3 mt-3">
-                                <button onClick={() => router.push('/tests')} className="flex-1 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition">
-                                    ← Tests
-                                </button>
-                                <button onClick={handleNextTest} className="flex-1 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition">
-                                    Suivant →
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Alerte silence */}
-                {voiceMetrics.isSilent && voiceMetrics.silenceDuration > 3 && (
-                    <div className="mt-3 p-3 bg-amber-100 border-2 border-amber-300 rounded-xl text-center">
-                        <span className="text-amber-700 font-bold text-sm">🗣️ Silence prolongé</span>
-                        <p className="text-amber-600 text-xs">Patient ne parle pas depuis {voiceMetrics.silenceDuration}s</p>
-                    </div>
-                )}
-
-                {/* Mots (si showWordList) */}
-                {testConfig.showWordList && (
-                    <div className="mt-4 bg-white border-4 border-gray-200 rounded-2xl p-4 shadow-xl">
-                        <div className="flex justify-between items-center mb-3">
-                            <h3 className="text-sm font-bold text-gray-700">📝 Mots cités</h3>
-                            <span className="text-xl font-bold text-blue-600">{words.length}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-                            {words.map((word, index) => (
-                                <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                                    {index + 1}. {word}
-                                </span>
-                            ))}
-                            {isRecording && !isPaused && (
-                                <input
-                                    type="text"
-                                    value={currentWord}
-                                    onChange={(e) => setCurrentWord(e.target.value)}
-                                    onKeyDown={handleAddWord}
-                                    placeholder="Ajouter..."
-                                    className="flex-1 min-w-[100px] px-3 py-1 border-2 border-blue-300 rounded-full focus:border-blue-500 focus:outline-none text-sm"
-                                    autoFocus
-                                />
-                            )}
-                        </div>
-                        {words.length === 0 && !isRecording && (
-                            <p className="text-sm text-gray-400 text-center">Commencez l'enregistrement</p>
                         )}
-                    </div>
+
+                        {/* Boutons */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div className="md:col-span-1">
+                                <div className="bg-white border-4 border-gray-200 rounded-2xl p-4 shadow-xl h-full">
+                                    <div className="text-center mb-3">
+                                        <div className="text-4xl font-bold text-blue-600 font-mono">
+                                            {formatTime(time)}
+                                        </div>
+                                        <div className="text-xs text-gray-500">/ {formatTime(testConfig.duration)}</div>
+                                    </div>
+
+                                    {isComplete ? (
+                                        <button onClick={handleRetry} className="w-full py-3 bg-amber-500 text-white text-lg font-bold rounded-xl hover:bg-amber-600 transition">
+                                            🔄 Recommencer
+                                        </button>
+                                    ) : !isRecording ? (
+                                        <button onClick={startRecording} className="w-full py-3 bg-red-600 text-white text-xl font-bold rounded-xl hover:bg-red-700 transition shadow">
+                                            🔴 Démarrer
+                                        </button>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <div className="text-center">
+                                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                                    🎙️ {isPaused ? 'Pause' : 'Enregistrement'}
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={togglePause} className="flex-1 py-2.5 bg-amber-500 text-white text-lg font-bold rounded-xl hover:bg-amber-600 transition">
+                                                    {isPaused ? '▶️' : '⏸️'}
+                                                </button>
+                                                <button onClick={stopRecording} className="flex-1 py-2.5 bg-gray-600 text-white text-lg font-bold rounded-xl hover:bg-gray-700 transition">
+                                                    ⏹️
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="md:col-span-3">
+                                <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 h-full flex flex-col justify-between">
+                                    <div>
+                                        <p className="text-xs font-medium text-blue-600">📋 Consignes</p>
+                                        <p className="text-sm text-blue-800 mt-1">
+                                            {testConfig.instructions?.join(' • ') || 'Suivez les instructions'}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-3 mt-3">
+                                        <button onClick={() => router.push('/tests')} className="flex-1 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition">
+                                            ← Tests
+                                        </button>
+                                        <button onClick={handleNextTest} className="flex-1 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition">
+                                            Suivant →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Alerte silence */}
+                        {voiceMetrics.isSilent && voiceMetrics.silenceDuration > 3 && (
+                            <div className="mt-3 p-3 bg-amber-100 border-2 border-amber-300 rounded-xl text-center">
+                                <span className="text-amber-700 font-bold text-sm">🗣️ Silence prolongé</span>
+                                <p className="text-amber-600 text-xs">Patient ne parle pas depuis {voiceMetrics.silenceDuration}s</p>
+                            </div>
+                        )}
+
+                        {/* Mots (si showWordList) */}
+                        {testConfig.showWordList && (
+                            <div className="mt-4 bg-white border-4 border-gray-200 rounded-2xl p-4 shadow-xl">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="text-sm font-bold text-gray-700">📝 Mots cités</h3>
+                                    <span className="text-xl font-bold text-blue-600">{words.length}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                    {words.map((word, index) => (
+                                        <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                                            {index + 1}. {word}
+                                        </span>
+                                    ))}
+                                    {isRecording && !isPaused && (
+                                        <input
+                                            type="text"
+                                            value={currentWord}
+                                            onChange={(e) => setCurrentWord(e.target.value)}
+                                            onKeyDown={handleAddWord}
+                                            placeholder="Ajouter..."
+                                            className="flex-1 min-w-[100px] px-3 py-1 border-2 border-blue-300 rounded-full focus:border-blue-500 focus:outline-none text-sm"
+                                            autoFocus
+                                        />
+                                    )}
+                                </div>
+                                {words.length === 0 && !isRecording && (
+                                    <p className="text-sm text-gray-400 text-center">Commencez l'enregistrement</p>
+                                )}
+                            </div>
+                        )}
+                    </>
                 )}
 
                 <div className="mt-6">
