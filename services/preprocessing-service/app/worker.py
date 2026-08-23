@@ -3,7 +3,7 @@ import logging
 import os
 import tempfile
 import time
-
+from voiceplatform_shared.crypto import unwrap_key, decrypt_bytes
 from pydub import AudioSegment
 
 from voiceplatform_shared.celery_app import make_celery_app
@@ -49,8 +49,18 @@ def process(self, message: dict):
 
             # MinIO Download
             t_sub = time.perf_counter()
-            minio.fget_object("raw-audio", msg.raw_audio_path, raw_local)
+            minio.fget_object("raw-audio", msg.raw_audio_path, raw_enc_local)
+
+            aad = session_id.encode("ascii")
+            with open(raw_enc_local, "rb") as f:
+                encrypted_audio = f.read()
+            data_key = unwrap_key(msg.wrapped_data_key, aad=aad)
+            plaintext_audio = decrypt_bytes(data_key, encrypted_audio, aad=aad)
+            with open(raw_local, "wb") as f:
+                f.write(plaintext_audio)
+
             original_duration = AudioSegment.from_wav(raw_local).duration_seconds
+            
             logger.info("  ├─ 📥 [MinIO] Downloaded raw audio (%.2fs duration) in %.2fs",
                         original_duration, time.perf_counter() - t_sub)
 

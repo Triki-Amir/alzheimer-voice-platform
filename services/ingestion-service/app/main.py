@@ -60,7 +60,7 @@ async def upload_session_audio(
     audio: UploadFile = File(...),
     doctor: dict = Depends(get_current_doctor),
     db: DBSession = Depends(get_db),
-    #_: None = Depends(verify_csrf),
+    _: None = Depends(verify_csrf),
 ):
     """
     Upload audio for a patient session.
@@ -114,6 +114,10 @@ async def upload_session_audio(
                 "patient_id": str(patient_id),
                 "raw_audio_path": object_name,
                 "wrapped_data_key": session.wrapped_data_key,
+                "metadata": {
+                    "doctor_id": str(patient.doctor_id),
+                    "patient_id": str(patient_id),
+                },
             },
         )
         
@@ -198,6 +202,7 @@ def delete_session(
     session_id: uuid.UUID,
     doctor: dict = Depends(get_current_doctor),
     db: DBSession = Depends(get_db),
+    _: None = Depends(verify_csrf),
 ):
     """
     Delete a session and its audio.

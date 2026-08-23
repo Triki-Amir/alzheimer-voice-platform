@@ -416,6 +416,7 @@ def update_patient(
     payload: schemas.PatientUpdate,
     doctor: models.Doctor = Depends(get_current_doctor),
     db: Session = Depends(get_db),
+    _: None = Depends(verify_csrf),
 ):
     """Met à jour un patient existant (vérifie que le patient appartient au docteur)."""
     patient = db.query(models.Patient).filter(
@@ -449,6 +450,7 @@ def delete_patient(
     patient_id: UUID,
     doctor: models.Doctor = Depends(get_current_doctor),
     db: Session = Depends(get_db),
+    _: None = Depends(verify_csrf),
 ):
     """Supprime un patient (vérifie que le patient appartient au docteur)."""
     patient = db.query(models.Patient).filter(
@@ -477,6 +479,7 @@ def delete_patient(
 async def enroll_doctor_voice(
     audio: UploadFile = File(...),
     doctor: models.Doctor = Depends(get_current_doctor),  # exige 2FA complète
+    _: None = Depends(verify_csrf),
 ):
     raw_audio = await audio.read()
 

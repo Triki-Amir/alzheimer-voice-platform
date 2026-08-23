@@ -7,12 +7,15 @@ import psycopg2
 import tempfile
 from voiceplatform_shared.minio_client import get_minio_client
 from voiceplatform_shared.celery_app import make_celery_app
+from voiceplatform_shared.constants import Queues
 from app.features import LinguisticFeatureExtractor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("linguistic_worker")
 
 app = make_celery_app("linguistic_extraction_service", "linguistic_extraction")
+
+FEATURE_ENGINEERING_QUEUE = getattr(Queues, "FEATURE_ENGINEERING", "feature_engineering")
 
 POS_MODEL_PATH = os.getenv("POS_MODEL_PATH", "/models/xlmr-tunisian-pos-final")
 
@@ -59,6 +62,7 @@ def save_linguistic_features_and_update_session(session_id: str, payload: dict) 
 @app.task(name="linguistic_extraction_service.process", bind=True, max_retries=3)
 def process(self, message: dict):
     session_id = message["session_id"]
+    patient_id = message.get("patient_id", "unknown")
     words = message.get("words", [])
     metadata = message.get("metadata", {})
     boundaries = metadata.get("sentence_boundaries", [])
@@ -81,6 +85,24 @@ def process(self, message: dict):
         logger.info(
             "✅ [SUCCESS] Stored linguistic features to MinIO (%s) | Session: %s | aligned=%s, significant_pauses=%d",
             object_name, session_id, payload.get("aligned"), payload.get("significant_pause_count", 0),
+        )
+
+        # Notify feature-engineering service. acoustic-feature-service
+        # dispatches here too, independently, as soon as it finishes --
+        # whichever of the two arrives first just won't find the other's
+        # file yet in MinIO and will retry with backoff (see that
+        # service's worker.py). Both sides must send this for the fan-in
+        # to actually work -- this was previously missing here, so
+        # feature-engineering only ever got triggered by the acoustic side.
+        app.send_task(
+            "feature_engineering_service.process",
+            kwargs={
+                "message": {
+                    "session_id": session_id,
+                    "patient_id": patient_id,
+                }
+            },
+            queue=FEATURE_ENGINEERING_QUEUE,
         )
  
         return {
