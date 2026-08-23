@@ -9,8 +9,13 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { ingestionApi } from '@/lib/ingestion_service_api'
+<<<<<<< HEAD
 import { isAuthenticated, verifySession } from '@/lib/auth'
 import type { User, Patient } from '@/types'
+=======
+import { getUser, verifySession , AuthUser } from '@/lib/auth'
+import type { Patient } from '@/types'
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 
 type TestType = 
     | 'cookie_theft' 
@@ -226,7 +231,7 @@ const audioBufferToWav = (audioBuffer: AudioBuffer): Blob => {
 export default function RecordingPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const [user, setUser] = useState<User | null>(null)
+    const [user, setUser] = useState<AuthUser | null>(null)
     const [patient, setPatient] = useState<Patient | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [isRecording, setIsRecording] = useState(false)
@@ -262,6 +267,7 @@ export default function RecordingPage() {
     const testConfig = testConfigs[testType]
 
     useEffect(() => {
+<<<<<<< HEAD
         const checkAuth = async () => {
             const valid = await verifySession()
             if (!valid) {
@@ -294,6 +300,47 @@ export default function RecordingPage() {
         return () => {
             cleanupResources()
         }
+=======
+        const loadData = async () => {
+            try {
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+                setUser(userData as AuthUser)
+
+                const patientId = searchParams?.get('patient')
+                const testId = searchParams?.get('test') as TestType || 'cookie_theft'
+
+                if (patientId) {
+                    await loadPatient(patientId)
+                }
+
+                if (testId && testConfigs[testId]) {
+                    setTestType(testId)
+                }
+
+                setIsLoading(false)
+            } catch (error) {
+                console.error('❌ Erreur de chargement:', error)
+                router.push('/')
+            }
+
+            return () => {
+                cleanupResources()
+            }
+        }
+
+        loadData()
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
     }, [router, searchParams])
 
     const loadPatient = async (patientId: string) => {
@@ -700,7 +747,7 @@ export default function RecordingPage() {
 
     return (
         <>
-            <Header user={user} />
+            
             <Navbar active="tests" />
             <main className="max-w-7xl mx-auto px-4 py-4">
                 

@@ -7,8 +7,90 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
-import { mockPatients, mockTests } from '@/lib/data'
+import { patientsApi } from '@/lib/api'
+import { getUser, verifySession } from '@/lib/auth'
 import type { User, Patient, Test } from '@/types'
+
+// Tests mockés (à remplacer par des données réelles)
+const mockTests: Test[] = [
+    {
+        id: 'cookie_theft',
+        name: 'Récit d\'image',
+        icon: '🖼️',
+        description: 'Décrivez l\'image en détail avec vos propres mots.',
+        duration: '3 min',
+        status: 'pending',
+        instructions: ['Observez attentivement l\'image', 'Décrivez-la en détail'],
+        imagePath: '/images/cookie-theft.jpg'
+    },
+    {
+        id: 'fluency',
+        name: 'Fluence Verbale',
+        icon: '🐾',
+        description: 'Citez le plus d\'animaux possible en 1 minute.',
+        duration: '1 min',
+        status: 'pending',
+        instructions: ['Citez le plus d\'animaux possible en 1 minute'],
+        showWordList: true
+    },
+    {
+        id: 'recall',
+        name: 'Rappel d\'informations',
+        icon: '📝',
+        description: 'Écoutez puis rappelez le maximum d\'informations.',
+        duration: '2 min',
+        status: 'pending',
+        instructions: ['Écoutez le texte', 'Rappelez le maximum d\'informations'],
+        showWordList: true
+    },
+    {
+        id: 'sentence',
+        name: 'Construction de phrases',
+        icon: '✏️',
+        description: 'Construisez des phrases complexes.',
+        duration: '2 min',
+        status: 'pending',
+        instructions: ['Construisez des phrases complexes']
+    },
+    {
+        id: 'naming',
+        name: 'Nomination d\'objets',
+        icon: '🔍',
+        description: 'Nommez les objets que vous voyez.',
+        duration: '3 min',
+        status: 'pending',
+        imagePath: '/images/naming-objects.jpg',
+        instructions: ['Nommez les objets que vous voyez']
+    },
+    {
+        id: 'repetition',
+        name: 'Répétition de phrases',
+        icon: '🔊',
+        description: 'Répétez les phrases que vous allez entendre.',
+        duration: '2 min',
+        status: 'pending',
+        instructions: ['Répétez les phrases'],
+        showWordList: true
+    },
+    {
+        id: 'comprehension',
+        name: 'Compréhension',
+        icon: '🧠',
+        description: 'Répondez aux questions sur le texte.',
+        duration: '3 min',
+        status: 'pending',
+        instructions: ['Écoutez le texte', 'Répondez aux questions']
+    },
+    {
+        id: 'spontaneous',
+        name: 'Discours spontané',
+        icon: '💬',
+        description: 'Parlez librement sur un sujet proposé.',
+        duration: '5 min',
+        status: 'pending',
+        instructions: ['Parlez librement sur le sujet proposé']
+    }
+]
 
 export default function TestDetailPage() {
     const router = useRouter()
@@ -21,29 +103,58 @@ export default function TestDetailPage() {
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
-        const userData = localStorage.getItem('user')
-        if (!userData) {
-            router.push('/')
-            return
-        }
-        setUser(JSON.parse(userData))
+        const loadData = async () => {
+            try {
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
 
-        const patientId = localStorage.getItem('selectedPatient')
-        if (patientId) {
-            const foundPatient = mockPatients.find(p => p.id === patientId)
-            if (foundPatient) {
-                setPatient(foundPatient)
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
+
+                // Récupérer le patient sélectionné
+                const patientId = localStorage.getItem('selectedPatient')
+                if (patientId) {
+                    const result = await patientsApi.getById(patientId)
+                    if (result.success && result.data) {
+                        setPatient(result.data)
+                    }
+                }
+
+                // Récupérer le test
+                const foundTest = mockTests.find(t => t.id === testId)
+                if (foundTest) {
+                    setTest(foundTest)
+                } else {
+                    router.push('/tests')
+                }
+
+                setIsLoading(false)
+            } catch (error) {
+                console.error('❌ Erreur:', error)
+                router.push('/')
             }
         }
 
-        const foundTest = mockTests.find(t => t.id === testId)
-        if (foundTest) {
-            setTest(foundTest)
-        } else {
-            router.push('/tests')
-        }
-
-        setIsLoading(false)
+        loadData()
     }, [router, testId])
 
     const handleStartRecording = () => {

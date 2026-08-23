@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y \
 
 COPY infra/ca/ca.crt /etc/ssl/certs/voiceapp-ca.crt
 COPY shared/ /shared/
-RUN pip install /shared
 COPY services/ingestion-service/requirements.txt .
 RUN pip install -r requirements.txt
 COPY services/ingestion-service/app ./app

@@ -11,6 +11,7 @@
 const API_URL = 'http://localhost:8000'
 const WS_URL = 'ws://localhost:8000'
 import type { Patient } from '@/types'
+import { getUser, verifySession } from '@/lib/auth'
 
 function getCsrfToken(): string {
     if (typeof document === 'undefined') return ''
@@ -25,55 +26,43 @@ export interface ApiResponse<T> {
     error?: string
     message?: string
 }
-/*
-export interface Patient {
-    id: string
-    name: string
-    initials: string
-    age: number
-    birthDate: string
-    dmiId: string
-    phone?: string
-    gender?: string
-    lastSession: string
-    color: string
-    createdAt?: string
-}
-*/
+
 export interface PatientReport {
     id?: string
     patient_id?: string
     [key: string]: any
 }
 
-function getToken(): string {
-    if (typeof document === 'undefined') return ''
+// ✅ Helper pour vérifier l'authentification
+const checkAuth = async (): Promise<{ authenticated: boolean; error?: string }> => {
+    const user = getUser()
+    if (!user) {
+        return { authenticated: false, error: 'Non authentifié' }
+    }
     
-    // ✅ Chercher d'abord dans localStorage
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
-    if (token) return token
+    const isAuth = await verifySession()
+    if (!isAuth) {
+        return { authenticated: false, error: 'Session expirée' }
+    }
     
-    // ✅ Sinon chercher dans les cookies
-    const match = document.cookie.match(/(?:^|; )(?:token|access_token)=([^;]*)/)
-    return match ? decodeURIComponent(match[1]) : ''
+    return { authenticated: true }
 }
 
 // ===================== PATIENT API =====================
 export const patientsApi = {
     getAll: async (): Promise<ApiResponse<Patient[]>> => {
-        try {
-            const token = getToken()
-            const headers: HeadersInit = {
-                'Content-Type': 'application/json',
-            }
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`
-            }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
+        try {
             const response = await fetch(`${API_URL}/patients`, {
                 method: 'GET',
                 credentials: 'include',
-                headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             })
 
             if (response.status === 401) {
@@ -108,19 +97,18 @@ export const patientsApi = {
     },
 
     getById: async (patientId: string): Promise<ApiResponse<Patient>> => {
-        try {
-            const token = getToken()
-            const headers: HeadersInit = {
-                'Content-Type': 'application/json',
-            }
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`
-            }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
+        try {
             const response = await fetch(`${API_URL}/patients/${patientId}`, {
                 method: 'GET',
                 credentials: 'include',
-                headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             })
 
             if (response.status === 401) {
@@ -158,8 +146,10 @@ export const patientsApi = {
         date_of_birth: string
         external_ref: string
     }): Promise<ApiResponse<Patient>> => {
-        const token = getToken()
-        if (!token) return { success: false, error: 'Non authentifié' }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
         console.log('📤 Envoi patient:', patientData)
 
@@ -169,7 +159,6 @@ export const patientsApi = {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
                     'X-CSRF-Token': getCsrfToken(),
                 },
                 body: JSON.stringify(patientData),
@@ -212,8 +201,10 @@ export const patientsApi = {
         phone?: string
         gender?: string
     }): Promise<ApiResponse<Patient>> => {
-        const token = getToken()
-        if (!token) return { success: false, error: 'Non authentifié' }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
         try {
             const response = await fetch(`${API_URL}/patients/${patientId}`, {
@@ -221,7 +212,6 @@ export const patientsApi = {
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
                     'X-CSRF-Token': getCsrfToken(),
                 },
                 body: JSON.stringify(patientData),
@@ -257,15 +247,16 @@ export const patientsApi = {
     },
 
     delete: async (patientId: string): Promise<ApiResponse<void>> => {
-        const token = getToken()
-        if (!token) return { success: false, error: 'Non authentifié' }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
         try {
             const response = await fetch(`${API_URL}/patients/${patientId}`, {
                 method: 'DELETE',
                 credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'X-CSRF-Token': getCsrfToken(),
                 },
             })
@@ -290,19 +281,18 @@ export const patientsApi = {
 // ===================== REPORT API =====================
 export const reportsApi = {
     getByPatientId: async (patientId: string): Promise<ApiResponse<PatientReport>> => {
-        try {
-            const token = getToken()
-            const headers: HeadersInit = {
-                'Content-Type': 'application/json',
-            }
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`
-            }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
+        try {
             const response = await fetch(`${API_URL}/reports/${patientId}`, {
                 method: 'GET',
                 credentials: 'include',
-                headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             })
 
             if (response.status === 401) {
@@ -322,17 +312,18 @@ export const reportsApi = {
     },
 
     exportPdf: async (patientId: string): Promise<Blob | null> => {
-        try {
-            const token = getToken()
-            const headers: HeadersInit = {}
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`
-            }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return null
+        }
 
+        try {
             const response = await fetch(`${API_URL}/reports/${patientId}/pdf`, {
                 method: 'GET',
                 credentials: 'include',
-                headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             })
 
             if (response.ok) {
@@ -361,8 +352,10 @@ export const uploadApi = {
         testType: string = 'cognitive',
         onProgress?: (progress: number) => void
     ): Promise<ApiResponse<{ session_id: string; status: string }>> => {
-        const token = getToken()
-        if (!token) return { success: false, error: 'Non authentifié' }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
         try {
             const formData = new FormData()
@@ -407,7 +400,6 @@ export const uploadApi = {
 
             xhr.open('POST', `${API_URL}/sessions/upload`)
             xhr.withCredentials = true
-            xhr.setRequestHeader('Authorization', `Bearer ${token}`)
             xhr.send(formData)
 
             return await promise
@@ -418,19 +410,18 @@ export const uploadApi = {
     },
 
     getStatus: async (sessionId: string): Promise<ApiResponse<any>> => {
-        try {
-            const token = getToken()
-            const headers: HeadersInit = {
-                'Content-Type': 'application/json',
-            }
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`
-            }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
+        try {
             const response = await fetch(`${API_URL}/sessions/${sessionId}/status`, {
                 method: 'GET',
                 credentials: 'include',
-                headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             })
 
             if (response.status === 401) {
@@ -450,19 +441,18 @@ export const uploadApi = {
     },
 
     getPatientSessions: async (patientId: string, limit: number = 10): Promise<ApiResponse<any[]>> => {
-        try {
-            const token = getToken()
-            const headers: HeadersInit = {
-                'Content-Type': 'application/json',
-            }
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`
-            }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
+        }
 
+        try {
             const response = await fetch(`${API_URL}/patients/${patientId}/sessions?limit=${limit}`, {
                 method: 'GET',
                 credentials: 'include',
-                headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
             })
 
             if (response.status === 401) {
@@ -484,17 +474,18 @@ export const uploadApi = {
 
 // ===================== WEBSOCKET =====================
 async function fetchWsTicket(): Promise<string | null> {
-    try {
-        const token = getToken()
-        const headers: HeadersInit = {}
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`
-        }
+    const auth = await checkAuth()
+    if (!auth.authenticated) {
+        return null
+    }
 
+    try {
         const response = await fetch(`${API_URL}/ws-ticket`, {
             method: 'GET',
             credentials: 'include',
-            headers,
+            headers: {
+                'Content-Type': 'application/json',
+            },
         })
         if (!response.ok) return null
         const data = await response.json()
@@ -511,14 +502,15 @@ export const metricsWebSocket = {
         onStatus: (status: any) => void,
         onError: (error: string) => void
     ): WebSocket | null => {
-        const token = getToken()
-        if (!token) {
+        // ✅ Vérifier l'authentification
+        const user = getUser()
+        if (!user) {
             onError('Non authentifié')
             return null
         }
 
         try {
-            const ws = new WebSocket(`${WS_URL}/ws/metrics?patient_id=${patientId}&token=${token}`)
+            const ws = new WebSocket(`${WS_URL}/ws/metrics?patient_id=${patientId}`)
 
             ws.onmessage = (event) => {
                 try {

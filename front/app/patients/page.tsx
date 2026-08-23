@@ -11,7 +11,11 @@ import SearchBar from '@/components/SearchBar'
 import EthicsBanner from '@/components/EthicsBanner'
 import PatientForm from '@/components/PatientForm'
 import { patientsApi } from '@/lib/api'
+<<<<<<< HEAD
 import { getToken, verifySession } from '@/lib/auth'
+=======
+import { getUser, verifySession } from '@/lib/auth'
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 import type { Patient, User, PatientFormData } from '@/types'
 import { isAuthenticated } from '@/lib/auth'
 export default function PatientsPage() {
@@ -22,7 +26,9 @@ export default function PatientsPage() {
     const [user, setUser] = useState<User | null>(null)
     const [isFormOpen, setIsFormOpen] = useState(false)
 
+    // ✅ Vérifier l'authentification via le cookie
     useEffect(() => {
+<<<<<<< HEAD
         const checkAuth = async () => {
             const valid = await verifySession()
             if (!valid) {
@@ -38,6 +44,41 @@ export default function PatientsPage() {
             loadPatients()
         }
         checkAuth()
+=======
+        const loadData = async () => {
+            try {
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
+                await loadPatients()
+            } catch (error) {
+                console.error('❌ Erreur:', error)
+                router.push('/')
+            }
+        }
+
+        loadData()
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
     }, [router])
 
     const loadPatients = async () => {
@@ -103,7 +144,6 @@ export default function PatientsPage() {
         p.dmiId?.includes(searchTerm)
     )
 
-    // ✅ UPDATED: Navigate to patient detail page instead of tests
     const handleSelectPatient = (patientId: string) => {
         localStorage.setItem('selectedPatient', patientId)
         router.push(`/patient/${patientId}`)

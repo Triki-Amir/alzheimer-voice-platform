@@ -9,7 +9,11 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { ingestionApi } from '@/lib/ingestion_service_api'
+<<<<<<< HEAD
 import { isAuthenticated, verifySession } from '@/lib/auth'
+=======
+import { getUser, verifySession } from '@/lib/auth'
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 import type { User, Patient } from '@/types'
 
 interface TestResultPageProps {
@@ -58,18 +62,35 @@ export default function TestResultPage({ params }: TestResultPageProps) {
     useEffect(() => {
         const loadData = async () => {
             try {
+<<<<<<< HEAD
                 const valid = await verifySession()
                 if (!valid) {
+=======
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
                     router.push('/')
                     return
                 }
 
-                const userData = localStorage.getItem('user')
+                const userData = getUser()
                 if (!userData) {
                     router.push('/')
                     return
                 }
-                setUser(JSON.parse(userData))
+
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
 
                 const { patientId, testId } = await params
 
@@ -79,23 +100,9 @@ export default function TestResultPage({ params }: TestResultPageProps) {
                 }
 
                 // Charger le patient depuis l'API
-                const patientsResult = await patientsApi.getAll()
-                if (patientsResult.success && patientsResult.data) {
-                    type ApiPatientLike = {
-                        id?: string | number
-                        external_ref?: string | null
-                    }
-
-                    const foundPatient = patientsResult.data.find(
-                        (item: ApiPatientLike) => String(item.id) === patientId || item.external_ref === patientId
-                    ) as Patient | undefined
-
-                    if (foundPatient) {
-                        setPatient(foundPatient)
-                    } else {
-                        setError('Patient non trouvé')
-                        return
-                    }
+                const patientResult = await patientsApi.getById(patientId)
+                if (patientResult.success && patientResult.data) {
+                    setPatient(patientResult.data)
                 } else {
                     setError('Patient non trouvé')
                     return
@@ -104,20 +111,15 @@ export default function TestResultPage({ params }: TestResultPageProps) {
                 // Charger les sessions du patient depuis l'ingestion service
                 const sessionsResult = await ingestionApi.getPatientSessions(patientId)
                 if (sessionsResult.success && sessionsResult.data) {
-                    // Trouver la session correspondante pour ce test
-                    // Pour l'instant, on utilise la première session disponible
                     const session = sessionsResult.data[0]
                     if (session) {
-                        // Générer les détails du test à partir de la session
                         const details = generateTestDetailsFromSession(testId, session)
                         setTestDetail(details)
                     } else {
-                        // Si aucune session, générer des données mockées pour l'affichage
                         const details = generateMockTestDetails(testId)
                         setTestDetail(details)
                     }
                 } else {
-                    // Si l'API échoue, générer des données mockées
                     const details = generateMockTestDetails(testId)
                     setTestDetail(details)
                 }
@@ -331,7 +333,12 @@ export default function TestResultPage({ params }: TestResultPageProps) {
                             {diagInfo.label}
                         </p>
                     </div>
-                    
+                    <div className="bg-white border-2 border-gray-200 rounded-xl p-4 text-center">
+                        <p className="text-sm text-gray-500">Confiance</p>
+                        <p className="text-2xl font-bold text-purple-600">
+                            {testDetail.confidence ? `${Math.round(testDetail.confidence * 100)}%` : '—'}
+                        </p>
+                    </div>
                     <div className="bg-white border-2 border-gray-200 rounded-xl p-4 text-center">
                         <p className="text-sm text-gray-500">Durée</p>
                         <p className="text-2xl font-bold text-blue-600">
@@ -349,9 +356,9 @@ export default function TestResultPage({ params }: TestResultPageProps) {
                             <div>
                                 <div className="flex justify-between items-center mb-1">
                                     <span className="text-sm text-gray-600">Débit de parole</span>
-                                    <span className="text-sm font-bold">3 mots/min</span>
+                                    <span className="text-sm font-bold">{testDetail.speechRate?.toFixed(1) || '—'} mots/sec</span>
                                 </div>
-                                <div className="text-xs text-gray-400">Normal: 16 mots/min</div>
+                                <div className="text-xs text-gray-400">Normal: 2-4 mots/sec</div>
                             </div>
                             <div>
                                 <div className="flex justify-between items-center mb-1">
@@ -394,7 +401,10 @@ export default function TestResultPage({ params }: TestResultPageProps) {
                                 <span className="text-sm text-gray-600">Temps de réponse</span>
                                 <span className="text-sm font-bold">{testDetail.features?.responseTime?.toFixed(1) || '—'}s</span>
                             </div>
-                            
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">Mots de remplissage</span>
+                                <span className="text-sm font-bold">{testDetail.fillerWords || 0}</span>
+                            </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-sm text-gray-600">Répétitions</span>
                                 <span className="text-sm font-bold">{testDetail.repetitions || 0}</span>

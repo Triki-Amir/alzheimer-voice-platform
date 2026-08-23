@@ -1,5 +1,5 @@
 // lib/api/ingestion_service_api.ts
-import { getToken } from '@/lib/auth'
+import { getUser, verifySession } from '@/lib/auth'
 
 const INGESTION_URL = 'http://localhost:8001'
 
@@ -23,6 +23,21 @@ export interface ApiResponse<T> {
     error?: string
 }
 
+// ✅ Helper pour vérifier l'authentification
+const checkAuth = async (): Promise<{ authenticated: boolean; error?: string }> => {
+    const user = getUser()
+    if (!user) {
+        return { authenticated: false, error: 'Non authentifié' }
+    }
+    
+    const isAuth = await verifySession()
+    if (!isAuth) {
+        return { authenticated: false, error: 'Session expirée' }
+    }
+    
+    return { authenticated: true }
+}
+
 export const ingestionApi = {
     /**
      * Upload audio file for a patient
@@ -32,9 +47,9 @@ export const ingestionApi = {
         audioBlob: Blob,
         testType: string = 'cognitive'
     ): Promise<ApiResponse<UploadResponse>> => {
-        const token = getToken()
-        if (!token) {
-            return { success: false, error: 'Non authentifié' }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
         }
 
         if (!patientId) {
@@ -70,14 +85,12 @@ export const ingestionApi = {
                 filename,
                 fileSize: finalBlob.size,
                 originalType: audioBlob.type,
-                finalType: finalBlob.type  // ✅ Devrait être 'audio/webm'
+                finalType: finalBlob.type
             })
 
             const response = await fetch(`${INGESTION_URL}/sessions/upload`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
+                credentials: 'include',
                 body: formData,
             })
 
@@ -106,15 +119,16 @@ export const ingestionApi = {
      * Get session status
      */
     getSessionStatus: async (sessionId: string): Promise<ApiResponse<SessionStatus>> => {
-        const token = getToken()
-        if (!token) {
-            return { success: false, error: 'Non authentifié' }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
         }
 
         try {
             const response = await fetch(`${INGESTION_URL}/sessions/${sessionId}/status`, {
+                method: 'GET',
+                credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
             })
@@ -142,15 +156,16 @@ export const ingestionApi = {
      * Get all sessions for a patient
      */
     getPatientSessions: async (patientId: string, limit: number = 10): Promise<ApiResponse<SessionStatus[]>> => {
-        const token = getToken()
-        if (!token) {
-            return { success: false, error: 'Non authentifié' }
+        const auth = await checkAuth()
+        if (!auth.authenticated) {
+            return { success: false, error: auth.error }
         }
 
         try {
             const response = await fetch(`${INGESTION_URL}/patients/${patientId}/sessions?limit=${limit}`, {
+                method: 'GET',
+                credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
             })

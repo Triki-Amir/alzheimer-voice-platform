@@ -8,8 +8,13 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
+<<<<<<< HEAD
 import { isAuthenticated, verifySession } from '@/lib/auth'
 import type { User, Patient } from '../../../types/index'
+=======
+import { getUser, verifySession } from '@/lib/auth'
+import type { User, Patient } from '@/types'
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 
 interface RapportPageProps {
     params: Promise<{
@@ -51,42 +56,63 @@ export default function RapportPage({ params }: RapportPageProps) {
 
     useEffect(() => {
         const loadData = async () => {
+<<<<<<< HEAD
             const valid = await verifySession()
             if (!valid) {
                 router.push('/')
                 return
             }
+=======
+            try {
+                // ✅ Vérifier l'authentification via le cookie
+                const isAuth = await verifySession()
+                if (!isAuth) {
+                    router.push('/')
+                    return
+                }
+>>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 
-            const userData = localStorage.getItem('user')
-            if (userData) {
-                setUser(JSON.parse(userData))
-            }
+                const userData = getUser()
+                if (!userData) {
+                    router.push('/')
+                    return
+                }
 
-            const { id } = await params
+                // ✅ Convertir AuthUser en User
+                const appUser: User = {
+                    id: userData.id,
+                    email: userData.email,
+                    name: userData.name,
+                    role: userData.role === 'clinician' ? 'doctor' : 
+                          userData.role === 'superadmin' ? 'admin' : 'doctor',
+                    hospital: undefined,
+                    voiceReferenceId: undefined
+                }
+                setUser(appUser)
 
-            if (!id) {
-                router.push('/dashboard')
-                return
-            }
+                const { id } = await params
 
-            // Charger le patient depuis l'API
-            const result = await patientsApi.getAll()
-            if (result.success && result.data) {
-                const foundPatient = result.data.find(p => String(p.id) === id)
-                if (foundPatient) {
+                if (!id) {
+                    router.push('/dashboard')
+                    return
+                }
+
+                // Charger le patient depuis l'API
+                const result = await patientsApi.getById(id)
+                if (result.success && result.data) {
                     const normalizedPatient: Patient = {
-                        ...foundPatient,
-                        id: String(foundPatient.id),
-                        name: foundPatient.name || '',
-                        initials: foundPatient.initials || '',
-                        age: Number(foundPatient.age) || 0,
-                        birthDate: foundPatient.birthDate || '',
-                        dmiId: foundPatient.dmiId || '',
-                        lastSession: foundPatient.lastSession || '',
-                        color: foundPatient.color || '#2563EB',
-                        createdAt: foundPatient.createdAt || new Date().toISOString(),
-                        gender: foundPatient.gender === 'Homme' || foundPatient.gender === 'Femme'
-                            ? foundPatient.gender
+                        ...result.data,
+                        id: String(result.data.id),
+                        name: result.data.name || '',
+                        initials: result.data.initials || '',
+                        age: Number(result.data.age) || 0,
+                        birthDate: result.data.birthDate || '',
+                        dmiId: result.data.dmiId || '',
+                        lastSession: result.data.lastSession || '',
+                        color: result.data.color || '#2563EB',
+                        createdAt: result.data.createdAt || new Date().toISOString(),
+                        gender: result.data.gender === 'Homme' || result.data.gender === 'Femme'
+                            ? result.data.gender
                             : undefined,
                     }
 
@@ -97,9 +123,9 @@ export default function RapportPage({ params }: RapportPageProps) {
                     router.push('/dashboard')
                     return
                 }
-            } else {
-                router.push('/dashboard')
-                return
+            } catch (error) {
+                console.error('❌ Erreur:', error)
+                router.push('/')
             }
 
             setIsLoading(false)
@@ -321,7 +347,6 @@ export default function RapportPage({ params }: RapportPageProps) {
                                 {diagnosisInfo.label}
                             </p>
                         </div>
-                        
                         <div className="bg-gray-50 p-3 rounded-lg text-center">
                             <p className="text-sm text-gray-500">Dernier test</p>
                             <p className="text-lg font-bold text-gray-700">
@@ -417,7 +442,6 @@ export default function RapportPage({ params }: RapportPageProps) {
                                 <ul className="mt-2 text-gray-600 list-disc list-inside space-y-1">
                                     <li>{testResults.length}/{allTests.length} tests complétés</li>
                                     <li>Dernière évaluation: {report?.lastSession}</li>
-                                    
                                 </ul>
                             </div>
                             <div className="p-4 bg-gray-50 rounded-xl">
