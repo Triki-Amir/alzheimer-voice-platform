@@ -1,8 +1,10 @@
-<<<<<<< HEAD
-# Environment variables
+# Environment variables and local developer overrides
 pyannote-env/
 
 .env
+.env.local
+docker-compose.override.yml
+
 __pycache__/
 .venv
 

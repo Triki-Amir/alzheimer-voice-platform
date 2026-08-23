@@ -1,0 +1,9 @@
+minio
+# celery/kombu/amqp intentionally NOT pinned here directly -- they come
+# transitively through voiceplatform_shared (see: pip show celery kombu amqp
+# inside any other service). If this service ever hits the same
+# SSLTransport/check_hostname error the acoustic service did, pin them
+# explicitly here to match, e.g.:
+# celery==5.6.3
+# kombu==5.6.2
+# amqp==5.3.1

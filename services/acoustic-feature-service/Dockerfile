@@ -1,20 +1,29 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
+# ffmpeg & libsndfile1 for audio decoding, libgomp1 for opensmile/librosa
+# threaded ops, git/build-essential for building any deps without wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     ffmpeg \
     libsndfile1 \
-    libpq-dev \
+    libgomp1 \
+    git \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY shared/ /app/shared
+COPY infra/ca/ca.crt /etc/ssl/certs/voiceapp-ca.crt
+
+# Copie et installation des paquets partagés
+COPY shared /app/shared
 RUN pip install --no-cache-dir -e /app/shared
 
+# Installation des dépendances du service acoustic-feature
 COPY services/acoustic-feature-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY services/acoustic-feature-service/ .
+# Copie du code applicatif (package app/: worker.py, audio_utils.py, features.py)
+COPY services/acoustic-feature-service/app /app/app
 
-CMD ["celery", "-A", "worker.app", "worker", "--loglevel=info", "-P", "solo", "-E"]
+# Lancement du worker Celery écoutant sur la file d'extraction acoustique
+CMD ["celery", "-A", "app.worker", "worker", "-l", "info", "-Q", "acoustic_extraction"]

@@ -22,9 +22,9 @@ def create_session(db: DBSession, patient_id, audio_bytes: bytes) -> tuple[Sessi
         id=session_id,
         patient_id=patient_id,
         wrapped_data_key=wrapped,
-        status="pending",  # ✅ Ajout du statut
-        created_at=datetime.utcnow(),  # ✅ Ajout de la date
-        metadata=json.dumps({  # ✅ Ajout des métadonnées
+        status="pending",
+        created_at=datetime.utcnow(),
+        metadata=json.dumps({
             "uploaded_at": datetime.utcnow().isoformat(),
             "status": "uploaded"
         })
@@ -38,7 +38,7 @@ def create_session(db: DBSession, patient_id, audio_bytes: bytes) -> tuple[Sessi
     return session, encrypted_audio
 
 
-# ===================== FONCTIONS MANQUANTES À AJOUTER =====================
+# ===================== FONCTIONS MANQUANTES =====================
 
 def get_session(db: DBSession, session_id: uuid.UUID):
     """Get a session by ID."""
@@ -55,10 +55,14 @@ def get_session_status(db: DBSession, session_id: uuid.UUID):
     metadata = {}
     if session.metadata:
         try:
-            metadata = json.loads(session.metadata)
+            if isinstance(session.metadata, dict):
+                metadata = session.metadata
+            else:
+                metadata = json.loads(session.metadata)
         except:
-            metadata = {"raw": session.metadata}
+            metadata = {"raw": str(session.metadata)}
     
+    # ✅ Retourner un dictionnaire simple (pas d'objets SQLAlchemy)
     return {
         "session_id": str(session.id),
         "patient_id": str(session.patient_id),
@@ -79,9 +83,22 @@ def get_patient_by_id(db: DBSession, patient_id: uuid.UUID, doctor_id: uuid.UUID
 
 def get_patient_sessions(db: DBSession, patient_id: uuid.UUID, limit: int = 10):
     """Get all sessions for a patient, ordered by creation date."""
-    return db.query(Session).filter(
+    sessions = db.query(Session).filter(
         Session.patient_id == patient_id
     ).order_by(Session.created_at.desc()).limit(limit).all()
+    
+    # ✅ Convertir en dictionnaires pour éviter les références circulaires
+    return [
+        {
+            "session_id": str(s.id),
+            "patient_id": str(s.patient_id),
+            "status": s.status,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "has_audio": s.raw_audio_path is not None if hasattr(s, 'raw_audio_path') else False,
+            "metadata": json.loads(s.metadata) if s.metadata else {}
+        }
+        for s in sessions
+    ]
 
 
 def delete_session(db: DBSession, session_id: uuid.UUID):
@@ -115,7 +132,10 @@ def update_session_status(db: DBSession, session_id: uuid.UUID, status: str, err
     metadata = {}
     if session.metadata:
         try:
-            metadata = json.loads(session.metadata)
+            if isinstance(session.metadata, dict):
+                metadata = session.metadata
+            else:
+                metadata = json.loads(session.metadata)
         except:
             pass
     

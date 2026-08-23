@@ -1,9 +1,15 @@
-celery==5.3.6
-opensmile>=2.5.0
-pandas>=2.2.0
-numpy>=1.26.4
-minio==7.2.4
-psycopg2-binary==2.9.9
-pydantic==2.6.1
-pydantic-settings==2.1.0
-soundfile==0.12.1
+opensmile
+librosa
+soundfile
+numpy
+minio
+
+# Pinned to match the confirmed-working versions from stt-service
+# (docker compose exec stt-service pip show celery kombu amqp).
+# An unpinned `celery` here had resolved a kombu/amqp pair incompatible with
+# your TLS-enabled RabbitMQ (kombu passing check_hostname into amqp's SSL
+# wrapper -- only supported by amqp>=5.3.0, and the wrong kombu version was
+# calling it regardless).
+celery==5.6.3
+kombu==5.6.2
+amqp==5.3.1

@@ -21,7 +21,6 @@ export default function PatientCard({ patient, onSelect }: PatientCardProps) {
                 <div className="font-semibold text-gray-900">{patient.name}</div>
                 <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
                     <span className="text-gray-500">ID: {patient.id}</span>
-                    <span className="text-amber-500">⭐ {patient.age} ans</span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-gray-500">
                     <span>Né le {patient.birthDate}</span>

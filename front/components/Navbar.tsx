@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-type NavItem = 'dashboard' | 'patients' | 'tests' | 'reports' | 'settings'
+type NavItem = 'dashboard' | 'patients' | 'tests' | 'reports' | 'calendar'
 
 interface NavbarProps {
     active: NavItem
@@ -11,7 +11,9 @@ export default function Navbar({ active }: NavbarProps) {
         { href: '/dashboard', label: '🏠 Dashboard', key: 'dashboard' },
         { href: '/patients', label: '👥 Patients', key: 'patients' },
         { href: '/tests', label: '📋 Tests', key: 'tests' },
-        { href: '/rapports', label: '📊 Rapports', key: 'reports' }
+        { href: '/rapports', label: '📊 Rapports', key: 'reports' },
+        { href: '/calendar', label: '📅 Calendrier', key: 'calendar' }, // ← Ajouter
+
     ]
 
     return (

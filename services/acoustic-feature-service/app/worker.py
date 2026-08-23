@@ -1,71 +1,128 @@
-import os
+import io
 import json
+import logging
+import os
 import tempfile
-import psycopg2
-from minio import Minio
+import time
+
+import soundfile as sf
+
 from voiceplatform_shared.celery_app import make_celery_app
-from features import AcousticFeatureExtractor
+from voiceplatform_shared.constants import Queues
+from voiceplatform_shared.minio_client import get_minio_client
 
-app = make_celery_app("acoustic_extraction_service", "acoustic_extraction")
+from .audio_utils import slice_patient_audio
+from .features import extract_acoustic_features  # rename import if your fn lives elsewhere
 
-MINIO_HOST = os.getenv("MINIO_HOST", "minio")
-MINIO_PORT = os.getenv("MINIO_PORT", "9000")
-MINIO_USER = os.getenv("MINIO_ROOT_USER", "voiceapp")
-MINIO_PASS = os.getenv("MINIO_ROOT_PASSWORD", "voiceapp123")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("acoustic_worker")
 
-POSTGRES_DB = os.getenv("POSTGRES_DB", "voiceapp_db")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "voiceapp")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "voiceapp123")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+ACOUSTIC_QUEUE = getattr(Queues, "ACOUSTIC_EXTRACTION", "acoustic_extraction")
+FEATURE_ENGINEERING_QUEUE = getattr(Queues, "FEATURE_ENGINEERING", "feature_engineering")
 
-minio_client = Minio(
-    f"{MINIO_HOST}:{MINIO_PORT}",
-    access_key=MINIO_USER,
-    secret_key=MINIO_PASS,
-    secure=False
-)
+app = make_celery_app("acoustic_feature_service", ACOUSTIC_QUEUE)
 
-extractor = AcousticFeatureExtractor()
+FEATURES_BUCKET = os.getenv("ACOUSTIC_FEATURES_BUCKET", "patient-audio")
 
-def save_to_db(session_id: str, feature_type: str, payload: dict):
-    conn = psycopg2.connect(
-        dbname=POSTGRES_DB,
-        user=POSTGRES_USER,
-        password=POSTGRES_PASSWORD,
-        host=POSTGRES_HOST,
-        port=POSTGRES_PORT
+
+def upload_features_json(minio, patient_id: str, session_id: str, features: dict) -> str:
+    # patient_id kept in the signature for logging/future use even though
+    # it's no longer part of the path -- session_id is now the sole key,
+    # matching where linguistic_features.json already lives.
+    object_name = f"{session_id}/acoustic_features.json"
+    payload = json.dumps(features, indent=2).encode("utf-8")
+    minio.put_object(
+        FEATURES_BUCKET,
+        object_name,
+        data=io.BytesIO(payload),
+        length=len(payload),
+        content_type="application/json",
     )
-    cursor = conn.cursor()
-    query = """
-    INSERT INTO session_features (session_id, feature_type, payload)
-    VALUES (%s, %s, %s)
-    ON CONFLICT (session_id, feature_type) 
-    DO UPDATE SET payload = EXCLUDED.payload, created_at = now();
-    """
-    cursor.execute(query, (session_id, feature_type, json.dumps(payload)))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    return object_name
 
-@app.task(name="acoustic_extraction_service.process", bind=True, max_retries=3)
+
+@app.task(name="acoustic_feature_service.process", bind=True, max_retries=3)
 def process(self, message: dict):
-    session_id = message["session_id"]
-    patient_audio_path = message["patient_audio_path"]
-    metadata = message.get("metadata", {})
-    pause_metrics = metadata.get("preprocessing_metrics", {}).get("pause_metrics", {})
+    t0 = time.perf_counter()
+    minio = get_minio_client()
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-        local_wav = tmp_file.name
+    session_id = message.get("session_id", "unknown")
+    patient_id = message.get("patient_id", "unknown")
+    metadata = message.get("metadata", {})
+
+    logger.info("🎧 [START] Acoustic Extraction | Session: %s | Patient: %s", session_id, patient_id)
 
     try:
-        minio_client.fget_object("patient-audio", patient_audio_path, local_wav)
-        payload = extractor.extract_from_file(local_wav, pause_metrics=pause_metrics)
-        save_to_db(session_id=session_id, feature_type="acoustic", payload=payload)
-        return {"status": "SUCCESS", "session_id": session_id, "feature_type": "acoustic"}
+        cleaned_audio_path = metadata.get("cleaned_audio_path")
+        labeled_segments = metadata.get("labeled_segments")
+
+        if not cleaned_audio_path or not labeled_segments:
+            raise ValueError(
+                "Missing cleaned_audio_path or labeled_segments in metadata -- "
+                "acoustic extraction needs the unmuted cleaned audio plus segment "
+                "labels to build a patient-only signal."
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            local_wav = os.path.join(tmp, "cleaned.wav")
+
+            t_sub = time.perf_counter()
+            minio.fget_object("patient-audio", cleaned_audio_path, local_wav)
+            logger.info("  ├─ 📥 [MinIO] Downloaded audio in %.2fs", time.perf_counter() - t_sub)
+
+            audio, sr = sf.read(local_wav, dtype="float32")
+            if audio.ndim > 1:
+                audio = audio.mean(axis=1)
+
+            patient_audio = slice_patient_audio(audio, sr, labeled_segments)
+
+            t_sub = time.perf_counter()
+            features = extract_acoustic_features(patient_audio, sr)
+            extraction_time = time.perf_counter() - t_sub
+            logger.info(
+                "  ├─ 🧮 [Features] Extracted %d acoustic features in %.2fs",
+                len(features), extraction_time,
+            )
+
+            t_sub = time.perf_counter()
+            features_object_name = upload_features_json(minio, patient_id, session_id, features)
+            logger.info(
+                "  ├─ 📤 [MinIO] Saved features to %s/%s in %.2fs",
+                FEATURES_BUCKET, features_object_name, time.perf_counter() - t_sub,
+            )
+
+        # Notify feature-engineering service. It waits for BOTH this and
+        # linguistic-feature-service to land before it can build the combined
+        # table -- see that service's worker.py for how it handles the race.
+        app.send_task(
+            "feature_engineering_service.process",
+            kwargs={
+                "message": {
+                    "session_id": session_id,
+                    "patient_id": patient_id,
+                }
+            },
+            queue=FEATURE_ENGINEERING_QUEUE,
+        )
+
+        total_duration = time.perf_counter() - t0
+        logger.info(
+            "✅ [SUCCESS] Acoustic extraction finished in %.2fs | Session: %s",
+            total_duration, session_id,
+        )
+
+        return {
+            "status": "SUCCESS",
+            "execution_time_sec": round(total_duration, 2),
+            "session_id": session_id,
+            "features_path": features_object_name,
+            "feature_count": len(features),
+        }
 
     except Exception as exc:
-        raise self.retry(exc=exc, countdown=5)
-    finally:
-        if os.path.exists(local_wav):
-            os.remove(local_wav)
+        total_duration = time.perf_counter() - t0
+        logger.error(
+            "❌ [FAILED] Acoustic extraction failed after %.2fs | Session: %s | Error: %s",
+            total_duration, session_id, str(exc),
+        )
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)

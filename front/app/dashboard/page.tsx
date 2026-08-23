@@ -34,29 +34,8 @@ interface Appointment {
     type: 'consultation' | 'test' | 'follow-up'
 }
 
-// ==================== DONNÉES MOCKÉES (Calendrier uniquement) ====================
-const mockAppointments: Appointment[] = [
-    { id: '1', patientId: 'PAT_000123', patientName: 'Slim Selmi', date: '2026-08-07', time: '09:30', type: 'consultation' },
-    { id: '2', patientId: 'PAT_000124', patientName: 'Khalil Hedili', date: '2026-08-07', time: '11:00', type: 'test' },
-    { id: '3', patientId: 'PAT_000125', patientName: 'Amir Triki', date: '2026-08-08', time: '14:30', type: 'follow-up' },
-    { id: '4', patientId: 'PAT_000126', patientName: 'Nadia Ayari', date: '2026-08-09', time: '10:00', type: 'consultation' },
-    { id: '5', patientId: 'PAT_000127', patientName: 'Ahmed Aouadi', date: '2026-08-10', time: '15:00', type: 'test' },
-]
-
-const calculateStats = (patients: Patient[]): DashboardStats => {
-    const today = new Date()
-    const currentMonth = today.toISOString().slice(0, 7)
-    
-    return {
-        totalPatients: patients.length,
-        highRisk: patients.filter(p => p.age > 75).length,
-        moderateRisk: patients.filter(p => p.age > 65 && p.age <= 75).length,
-        pendingTest: patients.filter(p => !p.lastSession || p.lastSession < '2026-07-01').length
-    }
-}
-
-// ==================== COMPOSANT CALENDRIER ====================
-const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
+// ==================== COMPOSANT APERÇU CALENDRIER ====================
+const CalendarPreview = ({ appointments }: { appointments: Appointment[] }) => {
     const weekDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
     const today = new Date()
     const currentDay = today.getDay()
@@ -72,10 +51,19 @@ const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
 
     const getTypeColor = (type: string) => {
         switch (type) {
-            case 'consultation': return 'bg-blue-100 text-blue-700'
-            case 'test': return 'bg-purple-100 text-purple-700'
-            case 'follow-up': return 'bg-green-100 text-green-700'
-            default: return 'bg-gray-100 text-gray-700'
+            case 'consultation': return 'bg-blue-100 text-blue-700 border-blue-200'
+            case 'test': return 'bg-purple-100 text-purple-700 border-purple-200'
+            case 'follow-up': return 'bg-green-100 text-green-700 border-green-200'
+            default: return 'bg-gray-100 text-gray-700 border-gray-200'
+        }
+    }
+
+    const getTypeIcon = (type: string) => {
+        switch (type) {
+            case 'consultation': return '💬'
+            case 'test': return '🧪'
+            case 'follow-up': return '📋'
+            default: return '📅'
         }
     }
 
@@ -83,9 +71,12 @@ const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">📅 Rendez-vous de la semaine</h3>
-                <span className="text-sm text-gray-500">
-                    {appointments.length} rendez-vous
-                </span>
+                <Link
+                    href="/calendar"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium flex items-center gap-2"
+                >
+                    📅 Voir le calendrier
+                </Link>
             </div>
 
             <div className="grid grid-cols-7 gap-2">
@@ -104,14 +95,14 @@ const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
                                 {dayAppointments.slice(0, 2).map((apt) => (
                                     <div
                                         key={apt.id}
-                                        className={`text-[10px] px-1 py-0.5 rounded ${getTypeColor(apt.type)} truncate`}
-                                        title={`${apt.patientName} - ${apt.time}`}
+                                        className={`text-[10px] px-1 py-0.5 rounded border ${getTypeColor(apt.type)} truncate`}
+                                        title={`${apt.patientName} - ${apt.time} - ${apt.type}`}
                                     >
                                         {apt.time}
                                     </div>
                                 ))}
                                 {dayAppointments.length > 2 && (
-                                    <div className="text-[10px] text-gray-400">
+                                    <div className="text-[10px] text-blue-500 font-medium">
                                         +{dayAppointments.length - 2}
                                     </div>
                                 )}
@@ -135,6 +126,12 @@ const WeeklyCalendar = ({ appointments }: { appointments: Appointment[] }) => {
                     <span className="text-xs text-gray-500">Suivi</span>
                 </div>
             </div>
+
+            <div className="mt-4 text-center">
+                <Link href="/calendar" className="text-blue-600 hover:underline text-sm font-medium">
+                    Voir tous les rendez-vous →
+                </Link>
+            </div>
         </div>
     )
 }
@@ -155,7 +152,15 @@ export default function DashboardPage() {
         pendingTest: 0
     })
     const [activeFilter, setActiveFilter] = useState<'all' | 'highRisk' | 'moderateRisk' | 'pendingTest'>('all')
-    const [appointments] = useState<Appointment[]>(mockAppointments)
+
+    // États pour les rendez-vous (mockés pour l'aperçu)
+    const [appointments] = useState<Appointment[]>([
+        { id: '1', patientId: 'PAT_000123', patientName: 'Slim Selmi', date: '2026-08-07', time: '09:30', type: 'consultation' },
+        { id: '2', patientId: 'PAT_000124', patientName: 'Khalil Hedili', date: '2026-08-07', time: '11:00', type: 'test' },
+        { id: '3', patientId: 'PAT_000125', patientName: 'Amir Triki', date: '2026-08-08', time: '14:30', type: 'follow-up' },
+        { id: '4', patientId: 'PAT_000126', patientName: 'Nadia Ayari', date: '2026-08-09', time: '10:00', type: 'consultation' },
+        { id: '5', patientId: 'PAT_000127', patientName: 'Ahmed Aouadi', date: '2026-08-10', time: '15:00', type: 'test' },
+    ])
 
     // ✅ Vérifier l'authentification via le cookie
     useEffect(() => {
@@ -178,7 +183,6 @@ export default function DashboardPage() {
 =======
         const loadData = async () => {
             try {
-                // ✅ Vérifier l'authentification via le cookie
                 const isAuth = await verifySession()
                 if (!isAuth) {
                     router.push('/')
@@ -191,7 +195,6 @@ export default function DashboardPage() {
                     return
                 }
 
-                // ✅ Convertir AuthUser en User
                 const appUser: User = {
                     id: userData.id,
                     email: userData.email,
@@ -281,7 +284,6 @@ export default function DashboardPage() {
         }
 
         const result = await patientsApi.create(newPatient)
-        console.log('Résultat création patient:', result.data)
         if (result.success && result.data) {
             const normalizedNewPatient: Patient = {
                 ...result.data,
@@ -305,6 +307,15 @@ export default function DashboardPage() {
             setIsFormOpen(false)
         } else {
             alert(`❌ Erreur: ${result.error || 'Impossible d\'ajouter le patient'}`)
+        }
+    }
+
+    const calculateStats = (patients: Patient[]): DashboardStats => {
+        return {
+            totalPatients: patients.length,
+            highRisk: patients.filter(p => p.age > 75).length,
+            moderateRisk: patients.filter(p => p.age > 65 && p.age <= 75).length,
+            pendingTest: patients.filter(p => !p.lastSession || p.lastSession < '2026-07-01').length
         }
     }
 
@@ -506,9 +517,9 @@ export default function DashboardPage() {
                     </div>
                 </section>
 
-                {/* Calendrier */}
+                {/* Aperçu Calendrier */}
                 <section className="mb-8">
-                    <WeeklyCalendar appointments={appointments} />
+                    <CalendarPreview appointments={appointments} />
                 </section>
 
                 <EthicsBanner />
