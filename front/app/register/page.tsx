@@ -11,10 +11,6 @@ import {
     setup2FA,
     confirm2FA,
     enrollDoctorVoice,
-<<<<<<< HEAD
-    refreshSession,
-=======
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
     AuthError,
 } from '@/lib/auth'
 import type { DoctorRegistrationData, PracticeType, User } from '@/types'
@@ -196,13 +192,6 @@ export default function RegisterPage() {
         setIsLoading(true)
         try {
             const filename = `${formData.firstName}_${formData.lastName}_${Date.now()}_reference.wav`
-<<<<<<< HEAD
-            await enrollDoctorVoice(voiceBlob, filename)
-
-            // Session fiawait enrollDoctorVoice(voiceBlob, filename)nale + profil "extra" (hôpital/pratique) en local,
-            // keyé par l'id du médecin extrait du token.
-            const user = await refreshSession()
-=======
             
             // ✅ Le cookie est envoyé automatiquement avec credentials: 'include'
             await enrollDoctorVoice(voiceBlob, filename)
@@ -210,7 +199,6 @@ export default function RegisterPage() {
             // ✅ Récupérer l'utilisateur depuis le backend via le cookie
             const user = await fetchUserFromBackend()
             
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
             if (user) {
                 let hospitalValue = formData.hospital
                 if (formData.practiceType === 'cabinet') {

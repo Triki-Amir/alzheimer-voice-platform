@@ -8,11 +8,7 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-<<<<<<< HEAD
-import { isAuthenticated, verifySession } from '@/lib/auth'
-=======
 import { getUser, verifySession } from '@/lib/auth'
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 import type { Patient, User } from '@/types'
 
 interface PatientPageProps {
@@ -31,14 +27,9 @@ export default function PatientPage({ params }: PatientPageProps) {
     useEffect(() => {
         const loadData = async () => {
             try {
-<<<<<<< HEAD
-                const valid = await verifySession()
-                if (!valid) {
-=======
                 // ✅ Vérifier l'authentification via le cookie
                 const isAuth = await verifySession()
                 if (!isAuth) {
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
                     router.push('/')
                     return
                 }

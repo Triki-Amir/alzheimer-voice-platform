@@ -8,13 +8,8 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-<<<<<<< HEAD
-import { isAuthenticated, verifySession } from '@/lib/auth'
-import type { User, Patient } from '../../../types/index'
-=======
 import { getUser, verifySession } from '@/lib/auth'
 import type { User, Patient } from '@/types'
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 
 interface RapportPageProps {
     params: Promise<{
@@ -56,13 +51,6 @@ export default function RapportPage({ params }: RapportPageProps) {
 
     useEffect(() => {
         const loadData = async () => {
-<<<<<<< HEAD
-            const valid = await verifySession()
-            if (!valid) {
-                router.push('/')
-                return
-            }
-=======
             try {
                 // ✅ Vérifier l'authentification via le cookie
                 const isAuth = await verifySession()
@@ -70,7 +58,6 @@ export default function RapportPage({ params }: RapportPageProps) {
                     router.push('/')
                     return
                 }
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 
                 const userData = getUser()
                 if (!userData) {

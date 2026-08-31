@@ -9,11 +9,7 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { ingestionApi } from '@/lib/ingestion_service_api'
-<<<<<<< HEAD
-import { isAuthenticated, verifySession } from '@/lib/auth'
-=======
 import { getUser, verifySession } from '@/lib/auth'
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 import type { User, Patient } from '@/types'
 
 interface TestResultPageProps {
@@ -62,14 +58,9 @@ export default function TestResultPage({ params }: TestResultPageProps) {
     useEffect(() => {
         const loadData = async () => {
             try {
-<<<<<<< HEAD
-                const valid = await verifySession()
-                if (!valid) {
-=======
                 // ✅ Vérifier l'authentification via le cookie
                 const isAuth = await verifySession()
                 if (!isAuth) {
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
                     router.push('/')
                     return
                 }

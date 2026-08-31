@@ -11,11 +11,7 @@ import PatientForm from '@/components/PatientForm'
 import EthicsBanner from '@/components/EthicsBanner'
 import { mockTests } from '@/lib/data'
 import { patientsApi } from '@/lib/api'
-<<<<<<< HEAD
-import { isAuthenticated, verifySession } from '@/lib/auth'
-=======
 import { getUser, verifySession } from '@/lib/auth'
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 import type { User, Patient, Test, PatientFormData } from '@/types'
 
 export default function TestsPage() {
@@ -28,23 +24,6 @@ export default function TestsPage() {
 
     // ✅ Vérifier l'authentification via le cookie
     useEffect(() => {
-<<<<<<< HEAD
-        const checkAuth = async () => {
-            const valid = await verifySession()
-            if (!valid) {
-                router.push('/')
-                return
-            }
-
-            const userData = localStorage.getItem('user')
-            if (userData) {
-                setUser(JSON.parse(userData))
-            }
-
-            loadPatients()
-        }
-        checkAuth()
-=======
         const loadData = async () => {
             try {
                 const isAuth = await verifySession()
@@ -78,7 +57,6 @@ export default function TestsPage() {
         }
 
         loadData()
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
     }, [router])
 
     const loadPatients = async () => {

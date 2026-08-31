@@ -8,13 +8,8 @@ import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
 import { ingestionApi } from '@/lib/ingestion_service_api'
-<<<<<<< HEAD
-import { isAuthenticated, verifySession } from '@/lib/auth'
-import type { User, Patient } from '@/types'
-=======
 import { getUser, verifySession , AuthUser } from '@/lib/auth'
 import type { Patient } from '@/types'
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
 
 type TestType = 
     | 'cookie_theft' 
@@ -540,40 +535,6 @@ export default function RecordingPage() {
     const testConfig = testConfigs[testType]
 
     useEffect(() => {
-<<<<<<< HEAD
-        const checkAuth = async () => {
-            const valid = await verifySession()
-            if (!valid) {
-                router.push('/')
-                return
-            }
-
-            const userData = localStorage.getItem('user')
-            if (!userData) {
-                router.push('/')
-                return
-            }
-            setUser(JSON.parse(userData))
-
-            const patientId = searchParams?.get('patient')
-            const testId = searchParams?.get('test') as TestType || 'cookie_theft'
-
-            if (patientId) {
-                loadPatient(patientId)
-            }
-
-            if (testId && testConfigs[testId]) {
-                setTestType(testId)
-            }
-
-            setIsLoading(false)
-        }
-        checkAuth()
-
-        return () => {
-            cleanupResources()
-        }
-=======
         const loadData = async () => {
             try {
                 const isAuth = await verifySession()
@@ -612,7 +573,6 @@ export default function RecordingPage() {
         }
 
         loadData()
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
     }, [router, searchParams])
 
     const loadPatient = async (patientId: string) => {

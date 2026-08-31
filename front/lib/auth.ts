@@ -119,16 +119,11 @@ export async function registerDoctor(
     }
 }
 
-<<<<<<< HEAD
-// ===================== Enrolement vocal (post-2FA) =====================
-export async function enrollDoctorVoice(audioBlob: Blob, filename: string): Promise<void> {
-=======
 // ===================== Enrôlement vocal =====================
 export async function enrollDoctorVoice(
     audioBlob: Blob, 
     filename: string
 ): Promise<void> {
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
     console.log('🎵 Audio:', filename, audioBlob.size, 'bytes')
     console.log('📍 URL voix:', `${API_URL}/doctors/voice-enroll`)
 
@@ -157,14 +152,9 @@ export async function enrollDoctorVoice(
             console.error('❌ Erreur voix:', errorText)
             throw new AuthError(await parseErrorDetail(response), response.status)
         }
-<<<<<<< HEAD
-
-        console.log('✅ Voix enregistrée!')
-=======
         
         const data = await response.json()
         console.log('✅ Voix enregistrée!', data)
->>>>>>> b056e8f36ec665af29dbd0b03746f8c8dc046b34
     } catch (error) {
         console.error('❌ Erreur voix:', error)
         if (error instanceof AuthError) throw error
@@ -279,18 +269,6 @@ export async function confirm2FA(preAuthToken: string, code: string): Promise<Tw
     }
 }
 
-<<<<<<< HEAD
-// ===================== Etape 2b : verification 2FA =====================
-export async function verify2FA(preAuthToken: string, code: string): Promise<void> {
-    const response = await fetch(`${API_URL}/login/verify-2fa`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ pre_auth_token: preAuthToken, code }),
-    })
-    if (!response.ok) {
-        throw new AuthError(await parseErrorDetail(response), response.status)
-=======
 // ===================== Etape 2b : verification 2FA (connexions suivantes) =====================
 export async function verify2FA(preAuthToken: string, code: string): Promise<void> {
     console.log('🔍 === verify2FA ===')
@@ -335,7 +313,6 @@ export async function verify2FA(preAuthToken: string, code: string): Promise<voi
         console.error('❌ Erreur verify2FA:', error)
         if (error instanceof AuthError) throw error
         throw new AuthError('Impossible de contacter le serveur', 0)
->>>>>>> 0552d5bd3c2412f0f216ee213eaa7db32aa02280
     }
 }
 
