@@ -136,7 +136,7 @@ services:
     container_name: voiceapp_acoustic_feature
     env_file: .env
     environment:
-      - RABBITMQ_PORT=5671
+      - RABBITMQ_PORT=5672
     command: celery -A app.worker worker -l info -Q acoustic_extraction --pool=solo -E    
     depends_on:
       rabbitmq:
@@ -204,35 +204,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-# --- LOCAL LLM INFERENCE ENGINE ---
-  vllm-server:
-    image: vllm/vllm-openai:latest
-    container_name: voiceapp_vllm
-    runtime: nvidia
-    env_file: .env
-    environment:
-      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
-      - CUDA_VISIBLE_DEVICES=0
-    command: >
-      --model Qwen/Qwen2.5-32B-Instruct-AWQ
-      --quantization awq
-      --gpu-memory-utilization 0.55
-      --max-model-len 4096
-      --port 8000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-    volumes:
-      - llm_models:/root/.cache/huggingface
 
   frontend:
     build:

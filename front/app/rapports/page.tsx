@@ -8,9 +8,7 @@ import Header from '@/components/Header'
 import Navbar from '@/components/Navbar'
 import EthicsBanner from '@/components/EthicsBanner'
 import { patientsApi } from '@/lib/api'
-import { getUser, verifySession } from '@/lib/auth'
-import type { User, Patient } from '@/types'
-
+import { getUser } from '@/lib/auth'
 import type { User, Patient } from '@/types'
 import { isAuthenticated, verifySession } from '@/lib/auth'
 // ==================== TYPES ====================

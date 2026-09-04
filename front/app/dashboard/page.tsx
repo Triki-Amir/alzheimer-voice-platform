@@ -11,7 +11,7 @@ import SearchBar from '@/components/SearchBar'
 import EthicsBanner from '@/components/EthicsBanner'
 import PatientForm from '@/components/PatientForm'
 import { patientsApi } from '@/lib/api'
-import { getUser, verifySession } from '@/lib/auth'
+import { getUser} from '@/lib/auth'
 import type { Patient, User, PatientFormData } from '@/types'
 import { verifySession } from '@/lib/auth'
 // ==================== TYPES ====================

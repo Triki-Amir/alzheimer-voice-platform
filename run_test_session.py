@@ -1,5 +1,6 @@
 import os
 import ssl
+import time
 import uuid
 from pathlib import Path
 
@@ -8,19 +9,19 @@ from celery import Celery
 from dotenv import load_dotenv
 
 load_dotenv()
-
-# Database & Infrastructure Credentials
-POSTGRES_HOST = "localhost" if os.getenv("POSTGRES_HOST") == "postgres" else os.getenv("POSTGRES_HOST", "localhost")
+env_pg_host = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_HOST = "127.0.0.1" if env_pg_host in ("postgres", "localhost") else env_pg_host
 POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 POSTGRES_DB = os.getenv("POSTGRES_DB", "voiceapp_db")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "voiceapp")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "voiceapp123")
 
-RABBITMQ_HOST = "localhost" if os.getenv("RABBITMQ_HOST") == "rabbitmq" else os.getenv("RABBITMQ_HOST", "localhost")
-RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5671"))
+env_rmq_host = os.getenv("RABBITMQ_HOST", "localhost")
+RABBITMQ_HOST = "127.0.0.1" if env_rmq_host in ("rabbitmq", "localhost") else env_rmq_host
+RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))  # Changed from 5671 to 5672
 RABBITMQ_USER = os.getenv("RABBITMQ_DEFAULT_USER", "voiceapp")
 RABBITMQ_PASS = os.getenv("RABBITMQ_DEFAULT_PASS", "voiceapp123")
-RABBITMQ_USE_TLS = os.getenv("RABBITMQ_USE_TLS", "true").lower() == "true"
+RABBITMQ_USE_TLS = os.getenv("RABBITMQ_USE_TLS", "false").lower() == "true"  # Set default to false for local testing
 
 
 def resolve_ca_cert_path() -> str:
@@ -37,59 +38,40 @@ def resolve_ca_cert_path() -> str:
 
 CA_CERT_PATH = resolve_ca_cert_path()
 
-DOCTOR_ID = "44444444-4444-4444-4444-444444444444"  # Unique UUID for the doctor
+DOCTOR_ID = "120a07ec-f26c-45a9-b025-d6845444c1b3"
 PATIENT_ID = str(uuid.uuid4())
 SESSION_ID = str(uuid.uuid4())
 
-# Matches the object name in your MinIO raw-audio bucket
-RAW_AUDIO_KEY = "patient-test.wav" 
+RAW_AUDIO_KEY = "cookies_theft_MCI_001.MP3"
 
 
 def get_db_connection():
     return psycopg2.connect(
-        host=POSTGRES_HOST, 
+        host=POSTGRES_HOST,
         port=POSTGRES_PORT,
-        dbname=POSTGRES_DB, 
-        user=POSTGRES_USER, 
-        password=POSTGRES_PASSWORD
+        dbname=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
     )
 
 
 def setup_test_patient_and_session(patient_id: str, session_id: str):
-    """Inserts required DB entities for foreign key consistency."""
     conn = get_db_connection()
     with conn.cursor() as cur:
-        # 1. Insert patient
         cur.execute(
             "INSERT INTO patients (id, first_name, last_name) VALUES (%s::uuid, 'Test', 'Patient') ON CONFLICT (id) DO NOTHING;",
-            (patient_id,)
+            (patient_id,),
         )
-        # 2. Insert session initial state including required schema columns
         cur.execute(
             """
             INSERT INTO sessions (
-                id, 
-                patient_id, 
-                status, 
-                raw_audio_path, 
-                patient_audio_path,
-                wrapped_data_key, 
-                created_at, 
-                updated_at
+                id, patient_id, status, raw_audio_path, patient_audio_path,
+                wrapped_data_key, created_at, updated_at
             ) 
-            VALUES (
-                %s::uuid, 
-                %s::uuid, 
-                'AUDIO_UPLOADED', 
-                %s, 
-                %s,
-                'dummy_test_wrapped_key_123', 
-                NOW(), 
-                NOW()
-            ) 
+            VALUES (%s::uuid, %s::uuid, 'AUDIO_UPLOADED', %s, %s, 'dummy_test_wrapped_key_123', NOW(), NOW()) 
             ON CONFLICT (id) DO NOTHING;
             """,
-            (session_id, patient_id, RAW_AUDIO_KEY, f"{session_id}/patient.wav")
+            (session_id, patient_id, RAW_AUDIO_KEY, f"{session_id}/patient.wav"),
         )
         conn.commit()
     conn.close()
@@ -97,13 +79,35 @@ def setup_test_patient_and_session(patient_id: str, session_id: str):
     print(f"📁 Session registered in database: {session_id}")
 
 
-def main():
-    print(f"🚀 Initializing E2E Test Run for Session ID: {SESSION_ID}")
+def monitor_session_status(session_id: str, timeout: int = 180):
+    print(f"\n⏳ Monitoring DB status for Session ID: {session_id} ...")
+    start_time = time.time()
+    last_status = None
 
-    # 1. Setup DB records
+    while time.time() - start_time < timeout:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT status FROM sessions WHERE id = %s::uuid;", (session_id,))
+            res = cur.fetchone()
+            if res:
+                current_status = res[0]
+                if current_status != last_status:
+                    print(f" 🔄 Status changed -> {current_status}")
+                    last_status = current_status
+
+                if current_status in ("FEATURES_ENGINEERED", "COMPLETED", "FAILED"):
+                    print(f"\n🏁 Pipeline reached terminal state: {current_status}")
+                    conn.close()
+                    return
+        conn.close()
+        time.sleep(3)
+
+
+def main():
+    print(f"🚀 Initializing Pipeline Test Run for Session ID: {SESSION_ID}")
+
     setup_test_patient_and_session(PATIENT_ID, SESSION_ID)
 
-    # 2. Connect to Celery / RabbitMQ
     broker_url = f"pyamqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}//"
     app = Celery("test_publisher", broker=broker_url)
     if RABBITMQ_USE_TLS:
@@ -118,23 +122,25 @@ def main():
         "raw_audio_path": RAW_AUDIO_KEY,
         "metadata": {
             "doctor_id": DOCTOR_ID,
-            "patient_id": PATIENT_ID
-        }
+            "patient_id": PATIENT_ID,
+        },
     }
 
-    # 3. Dispatch task to entry point queue
     result = app.send_task(
         "preprocessing_service.process",
         kwargs={"message": payload},
-        queue="preprocessing"
+        queue="preprocessing",
     )
 
-    print(f"📡 Task dispatched! Celery Task ID: {result.id}")
-    print("\n🔍 You can now monitor task progression across workers using docker logs:")
-    print("   • Preprocessing : docker logs -f <preprocessing_container_name>")
-    print("   • STT Service   : docker logs -f <stt_container_name>")
-    print("   • Acoustic      : docker logs -f <acoustic_container_name>")
-    print("   • Linguistic    : docker logs -f <linguistic_container_name>")
+    print(f"📡 Entry task dispatched! Celery Task ID: {result.id}")
+    print("\n🔍 Monitor logs using docker:")
+    print("   • Preprocessing       : docker logs -f <preprocessing_container>")
+    print("   • STT Service         : docker logs -f <stt_container>")
+    print("   • Acoustic            : docker logs -f <acoustic_container>")
+    print("   • Linguistic          : docker logs -f <linguistic_container>")
+    print("   • Feature Engineering : docker logs -f <feature_engineering_container>")
+
+    monitor_session_status(SESSION_ID)
 
 
 if __name__ == "__main__":
