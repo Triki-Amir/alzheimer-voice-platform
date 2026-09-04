@@ -39,7 +39,7 @@ const PRACTICE_TYPES: { value: PracticeType; label: string }[] = [
 // entre navigateurs/appareils.
 const PROFILE_EXTRA_KEY = 'ehealth_doctor_profile_extra'
 const USER_KEY = 'user'
-const API_URL = 'http://localhost:8000'
+const API_URL = '/auth'
 
 type Step = 'info' | 'setup-2fa' | 'backup-codes' | 'voice'
 

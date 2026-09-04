@@ -13,7 +13,7 @@
 // Both 2b) and 2a)'s confirm step set the access_token in an HttpOnly cookie.
 // The frontend NEVER reads the token directly - it's handled by the browser.
 
-const API_URL = 'http://localhost:8000'
+const API_URL = '/auth'
 
 const USER_KEY = 'user'
 const TOKEN_KEY = 'access_token'
@@ -118,7 +118,11 @@ export async function registerDoctor(
         throw new AuthError('Impossible de contacter le serveur', 0)
     }
 }
-
+function getCsrfToken(): string {
+    if (typeof document === 'undefined') return ''
+    const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/)
+    return match ? decodeURIComponent(match[1]) : ''
+}
 // ===================== Enrôlement vocal =====================
 export async function enrollDoctorVoice(
     audioBlob: Blob, 
@@ -135,7 +139,10 @@ export async function enrollDoctorVoice(
         
         const response = await fetch(`${API_URL}/doctors/voice-enroll`, {
             method: 'POST',
-            credentials: 'include',  // ✅ Envoie le cookie automatiquement
+            credentials: 'include',
+            headers: {
+                'X-CSRF-Token': getCsrfToken(),   // ← this was missing
+            },
             body: formData,
         })
 
