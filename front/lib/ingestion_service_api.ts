@@ -1,7 +1,7 @@
 // lib/api/ingestion_service_api.ts
 import { getUser, verifySession } from '@/lib/auth'
 
-const INGESTION_URL = 'http://localhost:8001'
+const INGESTION_URL = 'http://localhost:8002' // URL du service d'ingestion
 
 export interface UploadResponse {
     session_id: string

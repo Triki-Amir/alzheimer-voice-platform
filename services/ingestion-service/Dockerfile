@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
 
 COPY infra/ca/ca.crt /etc/ssl/certs/voiceapp-ca.crt
 COPY shared/ /shared/
+
+# Tell Python where to find voiceplatform_shared
+ENV PYTHONPATH="${PYTHONPATH}:/shared:/shared/voiceplatform_shared"
 COPY services/ingestion-service/requirements.txt .
 RUN pip install -r requirements.txt
 COPY services/ingestion-service/app ./app

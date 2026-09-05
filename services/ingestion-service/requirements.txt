@@ -12,3 +12,5 @@ soundfile
 librosa   
 numpy    
 pika==1.3.2  
+minio
+cryptography
