@@ -8,8 +8,8 @@
 // Never read the token from localStorage.
 
 // ✅ Utiliser HTTP pour le développement
-const API_URL = 'http://localhost:8000'
-const WS_URL = 'ws://localhost:8000'
+const API_URL = '/auth'      
+const WS_URL = '/ingest'
 import type { Patient } from '@/types'
 import { getUser, verifySession } from '@/lib/auth'
 
@@ -398,8 +398,9 @@ export const uploadApi = {
                 })
             })
 
-            xhr.open('POST', `${API_URL}/sessions/upload`)
+            xhr.open('POST', `/ingest/sessions/upload`)
             xhr.withCredentials = true
+            xhr.setRequestHeader('X-CSRF-Token', getCsrfToken())
             xhr.send(formData)
 
             return await promise

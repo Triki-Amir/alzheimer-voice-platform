@@ -1,8 +1,12 @@
 // lib/api/ingestion_service_api.ts
 import { getUser, verifySession } from '@/lib/auth'
 
-const INGESTION_URL = 'http://localhost:8002' // URL du service d'ingestion
-
+const INGESTION_URL = '/ingest'
+function getCsrfToken(): string {
+    if (typeof document === 'undefined') return ''
+    const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/)
+    return match ? decodeURIComponent(match[1]) : ''
+}
 export interface UploadResponse {
     session_id: string
     status: string
@@ -91,6 +95,9 @@ export const ingestionApi = {
             const response = await fetch(`${INGESTION_URL}/sessions/upload`, {
                 method: 'POST',
                 credentials: 'include',
+                headers: {
+                    'X-CSRF-Token': getCsrfToken(),
+                },
                 body: formData,
             })
 

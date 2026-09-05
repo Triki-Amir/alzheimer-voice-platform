@@ -2,28 +2,36 @@
 import json
 import os
 import logging
+import ssl
 import pika
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
-
 def get_rabbitmq_connection():
-    """
-    Établit une connexion à RabbitMQ en utilisant les variables d'environnement.
-    """
     credentials = pika.PlainCredentials(
         os.environ.get("RABBITMQ_DEFAULT_USER", "voiceapp"),
-        os.environ.get("RABBITMQ_DEFAULT_PASS", "changeme_strong_password")
+        os.environ.get("RABBITMQ_DEFAULT_PASS", "changeme_strong_password"),
     )
-    
+
+    use_tls = os.environ.get("RABBITMQ_USE_TLS", "false").lower() in ("1", "true", "yes")
+    port = int(os.environ.get("RABBITMQ_PORT", "5671" if use_tls else "5672"))
+
+    ssl_options = None
+    if use_tls:
+        context = ssl.create_default_context()
+        # local self-signed certs
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        ssl_options = pika.SSLOptions(context)
+
     params = pika.ConnectionParameters(
         host=os.environ.get("RABBITMQ_HOST", "rabbitmq"),
-        port=int(os.environ.get("RABBITMQ_PORT", 5672)),
+        port=port,
         credentials=credentials,
         heartbeat=60,
+        ssl_options=ssl_options,
     )
-    
     return pika.BlockingConnection(params)
 
 
